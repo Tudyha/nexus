@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package nexus.pkg;
+
+option go_package = "github.com/Tudyha/nexus/pkg/proto/proto";
+
+message HeartbeatReq {
+  CpuStat  cpu_stat  = 1; // Client 当前 CPU 负载快照
+  MemStat  mem_stat  = 2; // Client 当前内存负载快照
+  DiskStat disk_stat = 3; // Client 当前磁盘负载快照
+  NetStat  net_stat  = 4; // Client 当前网络负载快照
+}
+
+message HeartbeatRes {
+
+}
+
+// CPU负载
+message CpuStat {
+  double percent = 1; // CPU使用率
+}
+
+// 内存负载
+message MemStat {
+  uint64 total        = 1;
+  uint64 used         = 2;
+  uint64 free         = 3;
+  uint64 cached       = 4;
+  uint64 buffers      = 5;
+  uint64 available    = 6;
+  double used_percent = 7;
+  uint64 swap_total   = 8;
+  uint64 swap_used    = 9;
+  uint64 swap_free    = 10;
+}
+
+// 磁盘负载
+message DiskStat {
+  string device       = 1;
+  string mountpoint   = 2;
+  string fstype       = 3;
+  uint64 total        = 4;
+  uint64 used         = 5;
+  uint64 free         = 6;
+  double used_percent = 7;
+  // 新增：IO 统计（可选，部分挂载点无此数据）
+  uint64 read_bytes  = 8;
+  uint64 write_bytes = 9;
+  uint64 read_count  = 10;
+  uint64 write_count = 11;
+  uint64 io_time_ms  = 12;
+}
+
+// 网络负载
+message NetStat {
+  double bytes_sent = 1;
+  double bytes_recv = 2;
+}

@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+option go_package = "github.com/Tudyha/nexus/internal/server/proxy";
+
+message SimplifiedConfig {
+  uint32 user_level = 1;
+}

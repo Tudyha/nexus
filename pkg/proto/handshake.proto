@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package nexus.pkg;
+
+option go_package = "github.com/Tudyha/nexus/pkg/proto/proto";
+
+// ─── Handshake ────────────────────────────────────────────────────────────────
+message HandshakeReq {
+  int64  app_id    = 1; // 应用id
+  int64  timestamp = 2; // unix 毫秒
+  string nonce     = 3; // 随机数，防重放攻击
+  string signature = 4; // 签名：HMAC-SHA256(nonce + timestamp, app_secret)，防重放攻击
+  int32  version   = 5; // Client 版本，Server 可用于决策兼容性
+
+  ClientInfo client_info = 6; // 新增：Client 相关信息
+}
+
+message HandshakeRes {
+}
+
+message ClientInfo {
+  string device_id = 1; // 设备唯一 ID
+  string hostname  = 2; // 主机名
+  string host_id   = 3; // 主机ID
+  string username  = 4; // 用户名
+  string os        = 5; // 操作系统
+  string arch      = 6; // 架构
+
+  string gid = 7; // 组ID
+  string uid = 8; // 用户ID
+
+  string platform         = 9; // 平台
+  string platform_family  = 10; // 平台家族
+  string platform_version = 11; // 平台版本
+  string kernel_version   = 12; // 内核版本
+  string kernel_arch      = 13; // 内核架构
+
+  uint64 uptime    = 14; // 运行时间（秒）
+  uint64 boot_time = 15; // 启动时间（时间戳）
+
+  uint32 cpu_count  = 16; // CPU数量
+  string cpu_info   = 17; // CPU信息
+  uint64 mem_total  = 18; // 内存总量（字节）
+  uint64 disk_total = 19; // 磁盘总量（字节）
+}

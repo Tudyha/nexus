@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package nexus.pkg;
+
+option go_package = "github.com/Tudyha/nexus/pkg/proto/proto";
+
+import "common.proto";
+
+message TunnelOpenReq {
+  TunnelType type        = 1; // 隧道类型
+  string     remote_addr = 2; // 隧道目标地址
+}
+
+message TunnelOpenAck {
+
+}

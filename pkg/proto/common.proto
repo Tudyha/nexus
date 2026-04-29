@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package nexus.pkg;
+
+option go_package = "github.com/Tudyha/nexus/pkg/proto/proto";
+
+// 消息类型
+enum MessageType {
+  ENVELOPE_TYPE_UNKNOWN = 0;
+  // 1-30 系统级消息
+  HANDSHAKE     = 1; // 握手请求
+  HANDSHAKE_ACK = 2; // 握手响应
+  HEARTBEAT     = 3; // 心跳请求
+  HEARTBEAT_ACK = 4; // 心跳响应
+  DISCONNECT    = 5; // 断开连接
+
+  // 31-40 tunnel消息
+  TUNNEL_OPEN     = 31; // 创建 tunnel
+  TUUNEL_OPEN_ACK = 32; // 创建 tunnel 响应
+
+  // 命令消息
+  EXIT = 41; // 退出程序
+}
+
+// 错误码
+enum ErrorCode {
+  ERROR_CODE_UNKNOWN = 0;
+  SUCCESS            = 1; // 成功
+  FAILED             = 2; // 失败
+}
+
+// 隧道类型
+enum TunnelType {
+  TUNNEL_TYPE_UNKNOWN = 0;
+  TCP                 = 1; // TCP 隧道
+  UDP                 = 2; // UDP 隧道
+  PTY                 = 3; // 伪终端隧道
+}

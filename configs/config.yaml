@@ -1,0 +1,25 @@
+server:
+  env: dev
+  host: 127.0.0.1
+  
+  http:
+    port: 8080
+    write_timeout: 30
+    read_timeout: 30
+  
+  tcp:
+    port: 8081 # tcp监听端口
+    keep_alive: 60 # tcp连接保持时间，单位秒
+    read_timeout: 30 # tcp读取超时时间，单位秒
+  
+  v2ray:
+    port: 8082
+    log_path: logs/v2ray.log
+
+
+database:
+  type: sqlite # 数据库类型：mysql/sqlite
+  dns: data/nexus.db # 数据库连接字符串
+  max_idle_conns: 10 # 最大空闲连接数
+  max_open_conns: 100 # 最大打开连接数
+  conn_max_lifetime: 3600 # 连接最大生命周期（秒）

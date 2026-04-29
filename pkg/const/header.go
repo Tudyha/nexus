@@ -1,0 +1,7 @@
+package constant
+
+const (
+	HttpHeaderUserIDKey = "user-id"
+	HttpHeaderTokenKey  = "Authorization"
+	HttpHeaderAppIDKey  = "app-id"
+)

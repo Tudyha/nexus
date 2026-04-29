@@ -1,0 +1,16 @@
+data/*
+
+logs/*
+
+web/node_modules
+web/dist
+web/package-lock.json
+
+.roo
+
+.DS_Store
+
+.idea
+.vscode
+
+tmp/*

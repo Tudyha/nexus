@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package nexus.pkg;
+
+option go_package = "github.com/Tudyha/nexus/pkg/proto/proto";
+
+message ProcessReq {
+  
+}

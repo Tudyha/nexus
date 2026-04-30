@@ -52,8 +52,8 @@ COPY ./internal ./internal/
 COPY ./pkg ./pkg
 
 # 构建客户端
-RUN cd ./client && GOOS=darwin GOARCH=amd64 go build -o ./nexus-cli-darwin-amd64 ./main.go
-RUN cd ./client && GOOS=linux GOARCH=amd64 go build -o ./nexus-cli-linux-amd64 ./main.go
+RUN cd ./client && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o ./nexus-cli-darwin-amd64 ./main.go
+RUN cd ./client && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ./nexus-cli-linux-amd64 ./main.go
 
 # 构建服务端
 RUN go build -o ./app ./cmd/main.go

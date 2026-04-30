@@ -133,7 +133,12 @@ func (h *ClientController) OpenPty(ctx *gin.Context) {
 		response.Fail(ctx, err)
 		return
 	}
-	src, err := h.sessionManager.OpenTunnel(client.SessionID, proto.TunnelType_PTY, "")
+	s, err := h.sessionManager.GetSession(client.SessionID)
+	if err != nil {
+		response.Fail(ctx, err)
+		return
+	}
+	src, err := s.OpenTunnel(proto.TunnelType_PTY, "")
 	if err != nil {
 		response.Fail(ctx, err)
 		return

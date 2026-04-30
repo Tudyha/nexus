@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net"
 
 	"github.com/ThreeDotsLabs/watermill/pubsub/gochannel"
@@ -15,6 +14,7 @@ import (
 	constant "github.com/Tudyha/nexus/pkg/const"
 	"github.com/Tudyha/nexus/pkg/enum"
 	"github.com/Tudyha/nexus/pkg/errcode"
+	nexusio "github.com/Tudyha/nexus/pkg/io"
 	"github.com/Tudyha/nexus/pkg/proto"
 	"github.com/rs/zerolog/log"
 )
@@ -160,16 +160,15 @@ func (t *tunnel) handleConn(conn net.Conn) {
 		err = errcode.ErrClientNotReady
 		return
 	}
-	target, err := t.sessionManager.OpenTunnel(client.SessionID, t.tunnelType, t.remoteAddr)
+	s, err := t.sessionManager.GetSession(client.SessionID)
 	if err != nil {
 		return
 	}
-	go func() {
-		defer target.Close()
-		defer conn.Close()
-		go io.Copy(target, conn)
-		io.Copy(conn, target)
-	}()
+	dst, err := s.OpenTunnel(t.tunnelType, t.remoteAddr)
+	if err != nil {
+		return
+	}
+	go nexusio.Copy(conn, dst)
 }
 
 func (t *tunnel) stop() error {

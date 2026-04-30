@@ -34,7 +34,7 @@ const (
 	MessageType_DISCONNECT    MessageType = 5 // 断开连接
 	// 31-40 tunnel消息
 	MessageType_TUNNEL_OPEN     MessageType = 31 // 创建 tunnel
-	MessageType_TUUNEL_OPEN_ACK MessageType = 32 // 创建 tunnel 响应
+	MessageType_TUNNEL_OPEN_ACK MessageType = 32 // 创建 tunnel 响应
 	// 命令消息
 	MessageType_EXIT MessageType = 41 // 退出程序
 )
@@ -49,7 +49,7 @@ var (
 		4:  "HEARTBEAT_ACK",
 		5:  "DISCONNECT",
 		31: "TUNNEL_OPEN",
-		32: "TUUNEL_OPEN_ACK",
+		32: "TUNNEL_OPEN_ACK",
 		41: "EXIT",
 	}
 	MessageType_value = map[string]int32{
@@ -60,7 +60,7 @@ var (
 		"HEARTBEAT_ACK":         4,
 		"DISCONNECT":            5,
 		"TUNNEL_OPEN":           31,
-		"TUUNEL_OPEN_ACK":       32,
+		"TUNNEL_OPEN_ACK":       32,
 		"EXIT":                  41,
 	}
 )
@@ -209,7 +209,7 @@ const file_common_proto_rawDesc = "" +
 	"\n" +
 	"DISCONNECT\x10\x05\x12\x0f\n" +
 	"\vTUNNEL_OPEN\x10\x1f\x12\x13\n" +
-	"\x0fTUUNEL_OPEN_ACK\x10 \x12\b\n" +
+	"\x0fTUNNEL_OPEN_ACK\x10 \x12\b\n" +
 	"\x04EXIT\x10)*<\n" +
 	"\tErrorCode\x12\x16\n" +
 	"\x12ERROR_CODE_UNKNOWN\x10\x00\x12\v\n" +

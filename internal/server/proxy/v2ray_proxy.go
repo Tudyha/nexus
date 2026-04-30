@@ -52,6 +52,12 @@ func (h *handler) Process(ctx context.Context, link *transport.Link, dialer inte
 
 	account := v2raySession.InboundFromContext(ctx).User.Account.(*vmess.MemoryAccount)
 
+	// 获取客户端session
+	s, err := h.sessionManager.GetSession(account.ID.String())
+	if err != nil {
+		return err
+	}
+
 	var tunnelType proto.TunnelType
 	switch destination.Network {
 	case net.Network_TCP:
@@ -61,46 +67,43 @@ func (h *handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	default:
 		return fmt.Errorf("unknown network: %s", destination.Network)
 	}
-	c1, err := h.sessionManager.OpenTunnel(account.ID.String(), tunnelType, destination.NetAddr())
+
+	// 打开隧道
+	src, err := s.OpenTunnel(tunnelType, destination.NetAddr())
 	if err != nil {
 		return err
 	}
-	defer c1.Close()
 
 	requestDone := func() error {
-
 		var writer buf.Writer
 		if destination.Network == net.Network_TCP {
-			writer = buf.NewWriter(c1)
+			writer = buf.NewWriter(src)
 		} else {
-			writer = &buf.SequentialWriter{Writer: c1}
+			writer = &buf.SequentialWriter{Writer: src}
 		}
 
 		if err := buf.Copy(input, writer); err != nil {
 			return err
 		}
-
+		// 请求发完，关闭写端通知对端没有更多数据
+		// 不关闭整个 src，让 responseDone 继续读
+		if tc, ok := src.(interface{ CloseWrite() error }); ok {
+			tc.CloseWrite()
+		}
 		return nil
 	}
 
 	responseDone := func() error {
-
 		var reader buf.Reader
 		if destination.Network == net.Network_TCP {
-			reader = buf.NewReader(c1)
+			reader = buf.NewReader(src)
 		} else {
-			reader = buf.NewPacketReader(c1)
+			reader = buf.NewPacketReader(src)
 		}
-		if err := buf.Copy(reader, output); err != nil {
-			return err
-		}
-
-		return nil
+		return buf.Copy(reader, output)
 	}
 
-	if err := task.Run(ctx, requestDone, task.OnSuccess(responseDone, task.Close(output))); err != nil {
-		return err
-	}
-
-	return nil
+	err = task.Run(ctx, requestDone, responseDone)
+	src.Close()
+	return err
 }

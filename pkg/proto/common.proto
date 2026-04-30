@@ -16,7 +16,7 @@ enum MessageType {
 
   // 31-40 tunnel消息
   TUNNEL_OPEN     = 31; // 创建 tunnel
-  TUUNEL_OPEN_ACK = 32; // 创建 tunnel 响应
+  TUNNEL_OPEN_ACK = 32; // 创建 tunnel 响应
 
   // 命令消息
   EXIT = 41; // 退出程序

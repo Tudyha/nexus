@@ -14,7 +14,7 @@ import (
 // session管理器
 type Manager interface {
 	NewSession(conn net.Conn) error
-	OpenTunnel(sessionId string, tunnelType proto.TunnelType, targetAddr string) (net.Conn, error)
+	GetSession(sessionId string) (*Session, error)
 }
 
 var (
@@ -25,8 +25,7 @@ var (
 )
 
 type manager struct {
-	mu       sync.RWMutex // 读写锁
-	sessions sync.Map     // key: sessionId value: *Session
+	sessions sync.Map // key: sessionId value: *Session
 }
 
 func Init() error {
@@ -61,10 +60,10 @@ func GetManager() Manager {
 	return managerInstance
 }
 
-func (m *manager) OpenTunnel(sessionId string, tunnelType proto.TunnelType, targetAddr string) (net.Conn, error) {
+func (m *manager) GetSession(sessionId string) (*Session, error) {
 	session, ok := m.sessions.Load(sessionId)
 	if !ok {
 		return nil, errcode.ErrClientDisconnect
 	}
-	return session.(*Session).openTunnel(tunnelType, targetAddr)
+	return session.(*Session), nil
 }

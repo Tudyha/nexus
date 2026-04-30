@@ -42,7 +42,7 @@ func (t *TunnelHandler) Handle(ctx conn.Context) error {
 			code = proto.ErrorCode_FAILED
 			msg = err.Error()
 		}
-		ctx.GetConn().WriteMessage(proto.MessageType_TUUNEL_OPEN_ACK, &proto.Response{
+		ctx.GetConn().WriteMessage(proto.MessageType_TUNNEL_OPEN_ACK, &proto.Response{
 			Code: code,
 			Msg:  msg,
 		})

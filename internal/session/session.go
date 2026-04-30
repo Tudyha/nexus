@@ -165,7 +165,7 @@ func (s *Session) Close() {
 }
 
 // openTunnel 打开一个隧道，返回一个 net.Conn 对象
-func (s *Session) openTunnel(tunnelType proto.TunnelType, remoteAddr string) (net.Conn, error) {
+func (s *Session) OpenTunnel(tunnelType proto.TunnelType, remoteAddr string) (net.Conn, error) {
 	var err error
 	if s.status.Load() != StatusReady {
 		return nil, errcode.ErrClientNotReady

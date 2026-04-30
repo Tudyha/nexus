@@ -19,7 +19,7 @@ func RegisterRoutes(router *gin.Engine) {
 func registerStaticRoutes(router *gin.Engine) {
 	// 健康检查
 	router.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"code": 0,
 			"msg":  "ok",
 			"data": nil,

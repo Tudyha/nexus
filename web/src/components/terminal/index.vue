@@ -13,13 +13,11 @@ const props = defineProps<{
   id: string
 }>()
 
-// xterm DOM 引用
-const terminalEl = ref();
-
-// WebSocket 实例
-let webSocket: WebSocket | null = null;
-// xterm 实例
-let xterm: Terminal | null = null;
+const terminalEl = ref(); // xterm DOM 引用
+let ws: WebSocket | null = null; // WebSocket 实例
+const fitAddon = new FitAddon(); // xterm fit 插件实例
+let xterm: Terminal | null = null; // xterm 实例
+let resizeObs: ResizeObserver // 终端尺寸变化观察器
 
 // xterm 配置
 const options = {
@@ -29,26 +27,6 @@ const options = {
     background: '#000000',
   },
   rows: 40
-};
-
-const fitAddon = new FitAddon();
-
-// 窗口尺寸变化处理
-const sendSize = () => {
-  const windowSize = {
-    type: "size",
-    rows: xterm?.rows,
-    cols: xterm?.cols
-  };
-  const blob = new Blob([JSON.stringify(windowSize)], {
-    type: "application/json"
-  });
-  webSocket?.send(blob);
-};
-
-const resizeScreen = () => {
-  fitAddon.fit();
-  sendSize();
 };
 
 const initXterm = () => {
@@ -64,29 +42,55 @@ const initXterm = () => {
   // 建立 WebSocket 连接
   const wsUrl = `${VITE_WS_API_BASE_URL}/v1/client/${props.id}/pty?token=${u.token}`;
 
-  webSocket = new WebSocket(wsUrl);
+  ws = new WebSocket(wsUrl);
+  ws.binaryType = 'arraybuffer'
+  ws.onopen = () => xterm?.focus()
 
   // 接收消息并显示在终端上
-  webSocket.onmessage = event => {
-    xterm?.write(event.data);
+  ws.onmessage = event => {
+    if (!xterm) return;
+    xterm.write(new Uint8Array(event.data));
   };
 
+  ws.onclose = () => xterm?.write('\r\n\x1b[31m[disconnected]\x1b[0m\r\n')
+
   // 发送输入内容到服务端
-  xterm.onData(data => {
-    webSocket?.send(JSON.stringify({ type: "data", data }));
+  xterm.onData(input => {
+    if (!xterm) return;
+    if (!ws) return;
+    if (ws.readyState !== WebSocket.OPEN) return;
+    const data = new TextEncoder().encode(input);
+    const frame = new Uint8Array(1 + data.length);
+    frame[0] = 0x00;
+    frame.set(data, 1);
+    ws.send(frame);
   });
 
-  webSocket.onopen = sendSize;
-  window.addEventListener("resize", resizeScreen, false);
+  xterm.onResize(({ rows, cols }) => {
+    if (!ws) return;
+    if (ws.readyState !== WebSocket.OPEN) return
+    const frame = new Uint8Array(5)
+    const view = new DataView(frame.buffer)
+    frame[0] = 0x01
+    view.setUint16(1, rows, false)
+    view.setUint16(3, cols, false)
+    ws.send(frame)
+  })
+
+  resizeObs = new ResizeObserver(() => fitAddon.fit())
+  resizeObs.observe(terminalEl.value)
 }
 
 const closeTerminal = () => {
   console.log("close terminal");
-  if (webSocket) {
-    webSocket.close();
+  if (ws) {
+    ws.close();
   }
   if (xterm) {
     xterm.dispose();
+  }
+  if (resizeObs) {
+    resizeObs.disconnect();
   }
 }
 
@@ -100,7 +104,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   closeTerminal();
-  window.removeEventListener("resize", resizeScreen, false);
 });
 
 </script>

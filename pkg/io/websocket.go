@@ -1,37 +1,27 @@
 package io
 
 import (
-	"io"
-
 	"github.com/gorilla/websocket"
 )
 
 type WebSocketReadWriteCloser struct {
-	MessageType int
-	Conn        *websocket.Conn
-	textHandler func(reader io.Reader)
+	Conn *websocket.Conn
 }
 
-func (w *WebSocketReadWriteCloser) Read(p []byte) (n int, err error) {
-	messageType, reader, err := w.Conn.NextReader()
+func (w *WebSocketReadWriteCloser) Read(p []byte) (int, error) {
+	_, data, err := w.Conn.ReadMessage()
 	if err != nil {
-		return
+		return 0, err
 	}
-	if messageType != w.MessageType {
-		if w.textHandler != nil && messageType == websocket.TextMessage {
-			w.textHandler(reader)
-		}
-		return 0, nil
-	}
-	return reader.Read(p)
+	return copy(p, data), nil
 }
 
-func (w *WebSocketReadWriteCloser) SetTextHandler(h func(reader io.Reader)) {
-	w.textHandler = h
-}
-
-func (w *WebSocketReadWriteCloser) Write(p []byte) (n int, err error) {
-	return len(p), w.Conn.WriteMessage(w.MessageType, p)
+func (w *WebSocketReadWriteCloser) Write(p []byte) (int, error) {
+	err := w.Conn.WriteMessage(websocket.BinaryMessage, p)
+	if err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }
 
 func (w *WebSocketReadWriteCloser) Close() error {

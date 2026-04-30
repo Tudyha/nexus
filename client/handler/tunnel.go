@@ -2,8 +2,6 @@ package handler
 
 import (
 	"bufio"
-	"encoding/json"
-	"fmt"
 	"io"
 	"net"
 	"os"
@@ -12,11 +10,16 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/Tudyha/nexus/pkg/conn"
+	nexusio "github.com/Tudyha/nexus/pkg/io"
 	"github.com/Tudyha/nexus/pkg/proto"
 	"github.com/creack/pty"
+)
+
+var (
+	cachedShell string
+	shellOnce   sync.Once
 )
 
 type TunnelHandler struct {
@@ -28,7 +31,7 @@ func NewTunnelHandler() conn.MessageHandler {
 
 func (t *TunnelHandler) Handle(ctx conn.Context) error {
 	var err error
-	var target io.ReadWriteCloser
+	var dst io.ReadWriteCloser
 	var req proto.TunnelOpenReq
 
 	// 无论是否成功，都需要发送响应结果
@@ -51,38 +54,31 @@ func (t *TunnelHandler) Handle(ctx conn.Context) error {
 
 	switch req.GetType() {
 	case proto.TunnelType_TCP:
-		target, err = t.openTcp(req.RemoteAddr)
+		dst, err = t.openTcp(req.RemoteAddr)
 		if err != nil {
 			return err
 		}
 	case proto.TunnelType_UDP:
-		target, err = t.openUdp(req.RemoteAddr)
+		dst, err = t.openUdp(req.RemoteAddr)
 		if err != nil {
 			return err
 		}
 	case proto.TunnelType_PTY:
-		target, err = t.openPty()
+		dst, err = t.openPty()
 		if err != nil {
 			return err
 		}
 	default:
 	}
 
-	// 劫持底层连接
+	// 劫持底层连接，上层不会再进行数据读写
 	src, err := ctx.Hijack()
 	if err != nil {
 		return err
 	}
 
-	//TODO: 待优化
-	go func() {
-		defer func() {
-			target.Close()
-			src.Close()
-		}()
-		go io.Copy(target, src)
-		io.Copy(src, target)
-	}()
+	// 数据转发
+	go nexusio.Copy(src, dst)
 	return nil
 }
 
@@ -108,10 +104,17 @@ func (p *TunnelHandler) openPty() (io.ReadWriteCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newPTYConn(ptmx, cmd), nil
+	return nexusio.NewPtyReadWriteCloser(ptmx, cmd), nil
 }
 
 func defaultShell() string {
+	shellOnce.Do(func() {
+		cachedShell = resolveShell()
+	})
+	return cachedShell
+}
+
+func resolveShell() string {
 	// 优先读环境变量（尊重用户配置）
 	if s := os.Getenv("SHELL"); s != "" {
 		return s
@@ -180,71 +183,4 @@ func shellFromDscl() string {
 		return strings.TrimSpace(parts[1])
 	}
 	return ""
-}
-
-type ptyMsg struct {
-	Type string `json:"type"`
-	Data string `json:"data,omitempty"`
-	Rows uint16 `json:"rows,omitempty"`
-	Cols uint16 `json:"cols,omitempty"`
-}
-
-type ptyConn struct {
-	ptmx *os.File
-	cmd  *exec.Cmd
-
-	mu sync.Mutex
-}
-
-func newPTYConn(ptmx *os.File, cmd *exec.Cmd) *ptyConn {
-	return &ptyConn{
-		ptmx: ptmx,
-		cmd:  cmd,
-	}
-}
-
-func (c *ptyConn) Read(p []byte) (int, error) {
-	return c.ptmx.Read(p)
-}
-
-func (c *ptyConn) Write(p []byte) (int, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	var msg ptyMsg
-	if err := json.Unmarshal(p, &msg); err != nil {
-		return 0, fmt.Errorf("decode pty msg: %w", err)
-	}
-
-	switch msg.Type {
-	case "resize":
-		if msg.Rows == 0 || msg.Cols == 0 {
-			return 0, fmt.Errorf("invalid resize: rows=%d cols=%d", msg.Rows, msg.Cols)
-		}
-		if err := pty.Setsize(c.ptmx, &pty.Winsize{
-			Rows: msg.Rows,
-			Cols: msg.Cols,
-		}); err != nil {
-			return 0, fmt.Errorf("setsize: %w", err)
-		}
-
-	case "data":
-		if msg.Data == "" {
-			return len(p), nil // 空输入正常忽略
-		}
-		if _, err := io.WriteString(c.ptmx, msg.Data); err != nil {
-			return 0, fmt.Errorf("write stdin: %w", err)
-		}
-
-	default:
-		return 0, fmt.Errorf("unknown pty msg type: %q", msg.Type)
-	}
-	return len(p), nil
-}
-func (c *ptyConn) Close() error {
-	if c.cmd.Process != nil {
-		c.cmd.Process.Signal(syscall.SIGTERM)
-		c.cmd.Wait() // 回收进程，防止僵尸
-	}
-	return c.ptmx.Close()
 }

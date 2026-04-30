@@ -50,6 +50,14 @@ func getUserId(ctx *gin.Context) uint64 {
 	return ctx.GetUint64(constant.HttpHeaderUserIDKey)
 }
 
+func getClientID(ctx *gin.Context) uint64 {
+	v, ok := ctx.Params.Get("id")
+	if !ok {
+		return 0
+	}
+	return utils.StringToUint64(v)
+}
+
 func getAppID(ctx *gin.Context) uint64 {
 	return utils.StringToUint64(ctx.Request.Header.Get(constant.HttpHeaderAppIDKey))
 }

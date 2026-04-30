@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -13,7 +13,7 @@ import (
 	"github.com/Tudyha/nexus/internal/service"
 	"github.com/Tudyha/nexus/internal/session"
 	"github.com/Tudyha/nexus/pkg/errcode"
-	myio "github.com/Tudyha/nexus/pkg/io"
+	nexusio "github.com/Tudyha/nexus/pkg/io"
 	"github.com/Tudyha/nexus/pkg/proto"
 	"github.com/Tudyha/nexus/pkg/request"
 	"github.com/Tudyha/nexus/pkg/response"
@@ -37,7 +37,7 @@ func newClientController() *ClientController {
 	}
 }
 
-// GetPage 获取客户端列表
+// 获取客户端列表
 func (h *ClientController) GetPage(ctx *gin.Context) {
 	appID := getAppID(ctx)
 	if appID == 0 {
@@ -64,11 +64,11 @@ type clientConfig struct {
 	AppSecret  string `json:"app_secret"`  // 应用密钥
 }
 
-// GetBind 获取客户端绑定信息
+// 获取客户端绑定命令
 func (h *ClientController) GetBind(ctx *gin.Context) {
 	appID := getAppID(ctx)
 	if appID == 0 {
-		response.Fail(ctx, errcode.ErrInvalidParams)
+		response.Fail(ctx, errcode.ErrAppNotFound)
 		return
 	}
 
@@ -80,8 +80,9 @@ func (h *ClientController) GetBind(ctx *gin.Context) {
 
 	cfg := config.Get()
 
+	addr := net.JoinHostPort(cfg.Server.Host, fmt.Sprintf("%d", cfg.Server.TCP.Port))
 	agentConfig := clientConfig{
-		ServerAddr: fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.TCP.Port),
+		ServerAddr: addr,
 		AppId:      int64(app.ID),
 		AppSecret:  app.AppSecret,
 	}
@@ -94,21 +95,14 @@ func (h *ClientController) GetBind(ctx *gin.Context) {
 
 	c := utils.Base64Encode(data)
 
-	sh := "curl -s http://%s:%d/%s -o /tmp/nexus-cli && chmod +x /tmp/nexus-cli && /tmp/nexus-cli run -c %s"
+	sh := "curl -s http://%s:%d/%s -o /tmp/nexus-cli && chmod +x /tmp/nexus-cli && /tmp/nexus-cli run -d -c %s"
 	response.Success(ctx, response.ClientBindResponse{
 		MacBind:   fmt.Sprintf(sh, cfg.Server.Host, cfg.Server.HTTP.Port, "nexus-cli-darwin-amd64", c),
 		LinuxBind: fmt.Sprintf(sh, cfg.Server.Host, cfg.Server.HTTP.Port, "nexus-cli-linux-amd64", c),
 	})
 }
 
-func getClientID(ctx *gin.Context) uint64 {
-	v, ok := ctx.Params.Get("id")
-	if !ok {
-		return 0
-	}
-	return utils.StringToUint64(v)
-}
-
+// 获取客户端详情
 func (h *ClientController) GetByID(ctx *gin.Context) {
 	client, err := h.clientService.GetByID(ctx, getClientID(ctx))
 	if err != nil {
@@ -121,6 +115,7 @@ func (h *ClientController) GetByID(ctx *gin.Context) {
 	response.Success(ctx, res)
 }
 
+// 删除客户端
 func (h *ClientController) Delete(ctx *gin.Context) {
 	_, err := h.clientService.DeleteByID(ctx, getClientID(ctx))
 	if err != nil {
@@ -131,6 +126,7 @@ func (h *ClientController) Delete(ctx *gin.Context) {
 	response.Success(ctx, nil)
 }
 
+// pty伪终端
 func (h *ClientController) OpenPty(ctx *gin.Context) {
 	client, err := h.clientService.GetByID(ctx, getClientID(ctx))
 	if err != nil {
@@ -152,21 +148,13 @@ func (h *ClientController) OpenPty(ctx *gin.Context) {
 		},
 	}
 
-	target, err := upgrader.Upgrade(ctx.Writer, ctx.Request, nil)
+	dst, err := upgrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
 		response.Fail(ctx, err)
 		src.Close()
 		return
 	}
-	go func() {
-		defer func() {
-			src.Close()
-			target.Close()
-		}()
-		tg := &myio.WebSocketReadWriteCloser{Conn: target, MessageType: websocket.TextMessage}
-		go io.Copy(tg, src)
-		io.Copy(src, tg)
-	}()
+	go nexusio.Copy(src, &nexusio.WebSocketReadWriteCloser{Conn: dst})
 }
 
 func (h *ClientController) GenerateV2raySubscribeLink(ctx *gin.Context) {

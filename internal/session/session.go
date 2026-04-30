@@ -7,6 +7,7 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/Tudyha/nexus/pkg/conn"
 	constant "github.com/Tudyha/nexus/pkg/const"
@@ -85,8 +86,14 @@ func (s *Session) checkAuth(netConn net.Conn) {
 		return
 	}
 
-	// 初始化 smux session
-	s.session, err = smux.Server(netConn, nil)
+	// 初始化 smux session（低延迟优化配置）
+	s.session, err = smux.Server(netConn, &smux.Config{
+		KeepAliveInterval: 5 * time.Second,  // 心跳间隔
+		KeepAliveTimeout:  15 * time.Second, // 超时，需 ≥ Interval
+		MaxFrameSize:      65535,            // 最大允许值（64KB）
+		MaxReceiveBuffer:  2 * 1024 * 1024,  // 2MB
+		MaxStreamBuffer:   1 * 1024 * 1024,  // 1MB，需 ≤ MaxReceiveBuffer
+	})
 	if err != nil {
 		return
 	}

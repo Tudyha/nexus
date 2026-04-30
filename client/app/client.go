@@ -126,8 +126,14 @@ func (c *Client) connect() error {
 		return err
 	}
 
-	// 握手成功
-	session, err := smux.Client(netConn, nil)
+	// 握手成功，使用低延迟smux配置
+	session, err := smux.Client(netConn, &smux.Config{
+		KeepAliveInterval: 5 * time.Second,  // 心跳间隔
+		KeepAliveTimeout:  15 * time.Second, // 超时，需 ≥ Interval
+		MaxFrameSize:      65535,            // 最大允许值（64KB）
+		MaxReceiveBuffer:  2 * 1024 * 1024,  // 2MB
+		MaxStreamBuffer:   1 * 1024 * 1024,  // 1MB，需 ≤ MaxReceiveBuffer
+	})
 	if err != nil {
 		return fmt.Errorf("smux: %w", err)
 	}

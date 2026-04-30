@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from "vue-router";
+import { createRouter, createWebHashHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
 import NProgress from "@/config/nprogress";
 import layout from "./dynamic-route";
@@ -19,7 +19,7 @@ export const RootRoute = {
 export const basicRoutes = [RootRoute, layout];
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(),
   routes: basicRoutes as RouteRecordRaw[],
   scrollBehavior: () => ({ left: 0, top: 0 }),
 });

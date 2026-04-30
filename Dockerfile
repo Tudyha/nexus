@@ -67,6 +67,7 @@ COPY --from=builder /app/client/nexus-cli-darwin-amd64 ./build/nexus-cli-darwin-
 COPY --from=builder /app/client/nexus-cli-linux-amd64 ./build/nexus-cli-linux-amd64
 COPY --from=builder /app/app /app/app
 COPY ./configs ./configs
+COPY ./pkg/ip/GeoLite2-Country.mmdb ./pkg/ip/GeoLite2-Country.mmdb
 
 RUN mkdir -p ./logs ./data ./tmp
 

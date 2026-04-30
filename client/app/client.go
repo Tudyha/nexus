@@ -46,12 +46,14 @@ func NewClient(cfg *config.Config) *Client {
 
 	sysHandler := handler.NewSysHandler()
 	tunnelHandler := handler.NewTunnelHandler()
+	exitHandler := handler.NewExitHandler()
 	a := &Client{
 		cfg:        cfg,
 		handlers:   make(map[proto.MessageType]conn.MessageHandler),
 		sysHandler: sysHandler,
 	}
 	a.handlers[tunnelHandler.Type()] = tunnelHandler
+	a.handlers[exitHandler.Type()] = exitHandler
 	return a
 }
 

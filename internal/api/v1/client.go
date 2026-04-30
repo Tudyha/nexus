@@ -117,10 +117,14 @@ func (h *ClientController) GetByID(ctx *gin.Context) {
 
 // 删除客户端
 func (h *ClientController) Delete(ctx *gin.Context) {
-	_, err := h.clientService.DeleteByID(ctx, getClientID(ctx))
+	client, err := h.clientService.GetByID(ctx, getClientID(ctx))
 	if err != nil {
 		response.Fail(ctx, err)
 		return
+	}
+
+	if s, err := h.sessionManager.GetSession(client.SessionID); s != nil && err == nil {
+		s.Exit()
 	}
 
 	response.Success(ctx, nil)

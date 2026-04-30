@@ -208,8 +208,34 @@ func (s *Session) OpenTunnel(tunnelType proto.TunnelType, remoteAddr string) (ne
 	return stream, nil
 }
 
-// executeCommand 执行命令，返回命令输出
-func (s *Session) executeCommand() error {
+func (s *Session) execute(msgType proto.MessageType) error {
+	if s.status.Load() != StatusReady {
+		return errcode.ErrClientNotReady
+	}
 
+	stream, err := s.session.OpenStream()
+	if err != nil {
+		return err
+	}
+
+	c := conn.NewConn(stream)
+	defer c.Close()
+
+	// 发请求
+	if err := c.WriteMessage(msgType, &proto.ProcessReq{}); err != nil {
+		return err
+	}
+
+	// 读响应
+	_, err = c.ReadMessageAck()
+	if err != nil {
+		return err
+	}
+
+	// 反序列化响应
 	return nil
+}
+
+func (s *Session) Exit() error {
+	return s.execute(proto.MessageType_EXIT)
 }

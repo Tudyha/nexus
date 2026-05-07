@@ -10,6 +10,10 @@
           <main class="p-4 sm:p-6 flex-1 w-full max-w-480 mx-auto">
             <RouterView />
           </main>
+          <!-- Footer -->
+          <footer class="px-4 sm:px-6 pb-4 text-center text-xs text-base-content/30">
+            <p>Nexus &copy; {{ new Date().getFullYear() }} &middot; Intranet Penetration Tool</p>
+          </footer>
         </div>
         <!-- Sidebar -->
         <div v-if="!route.meta.hideSidebar" class="drawer-side h-full">

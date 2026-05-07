@@ -11,11 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    Cal: typeof import('./components/common/Calendar.vue')['default']
-    Calendar: typeof import('./components/common/Calendar.vue')['default']
-    CommonTable: typeof import('./components/common/Table.vue')['default']
     CopyButton: typeof import('./components/common/CopyButton.vue')['default']
-    Doughnut: typeof import('./components/chart/gauge.vue')['default']
     Gauge: typeof import('./components/chart/gauge.vue')['default']
     Line: typeof import('./components/chart/line.vue')['default']
     Locales: typeof import('./components/locales/index.vue')['default']

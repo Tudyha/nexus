@@ -1,13 +1,20 @@
 <script setup lang="ts">
+import { Icon } from '@iconify/vue';
 import CommonTable from '@/components/common/Table.vue';
 import type { ClientTunnelResponse } from '@/types';
-import { getClientTunnel, createClientTunnel } from '@/api/client';
+import { getClientTunnel, createClientTunnel, deleteClientTunnel } from '@/api/client';
 
 const props = defineProps<{
   id: string
 }>();
 
 const data = ref<ClientTunnelResponse[]>([]);
+const deleteTarget = ref<ClientTunnelResponse | null>(null);
+
+const addTunnelDialog = ref<HTMLDialogElement | null>(null);
+const deleteTunnelDialog = ref<HTMLDialogElement | null>(null);
+const loading = ref(false);
+
 const columns = [
   {
     key: 'id',
@@ -29,6 +36,21 @@ const columns = [
     key: 'remote_addr',
     label: '远程地址',
   },
+  {
+    key: 'action',
+    label: '操作',
+    render: (_column: any, row: any) => {
+      return h('button', {
+        class: 'btn btn-sm btn-ghost text-error',
+        onClick: () => {
+          deleteTarget.value = row;
+          deleteTunnelDialog.value?.showModal();
+        }
+      }, [
+        h(Icon, { icon: 'mdi:trash-can-outline', class: 'w-4 h-4' })
+      ]);
+    }
+  },
 ]
 
 const form = ref({
@@ -36,9 +58,6 @@ const form = ref({
   local_port: null,
   remote_addr: '',
 });
-
-const addTunnelDialog = ref<HTMLDialogElement | null>(null);
-const loading = ref(false);
 
 onMounted(async () => {
   handleSearch();
@@ -64,12 +83,25 @@ const handleAdd = async () => {
     loading.value = false;
   }
 }
+
+const handleDelete = async () => {
+  if (!deleteTarget.value) return;
+  loading.value = true;
+  try {
+    await deleteClientTunnel(Number(props.id), deleteTarget.value.id);
+    deleteTarget.value = null;
+    deleteTunnelDialog.value?.close();
+    await handleSearch();
+  } finally {
+    loading.value = false;
+  }
+}
 </script>
 
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-end space-x-1">
-      <button class="btn btn-sm btn-primary" onclick="add_tunnel_dialog.showModal()">
+      <button class="btn btn-sm btn-primary" @click="addTunnelDialog?.showModal()">
         <icon icon="mdi:plus-thick" class="w-4 h-4" />
       </button>
       <button class="btn btn-sm btn-primary" @click="handleSearch">
@@ -114,6 +146,18 @@ const handleAdd = async () => {
             <button class="btn" type="submit" :disabled="loading">{{ loading ? '提交中...' : '确定' }}</button>
           </div>
         </form>
+      </div>
+    </dialog>
+
+    <!-- 删除隧道确认弹窗 -->
+    <dialog ref="deleteTunnelDialog" id="delete_tunnel_dialog" class="modal">
+      <div class="modal-box">
+        <h3 class="text-lg font-bold mb-2">确认删除</h3>
+        <p class="text-base-content/70">确认删除隧道？此操作将关闭该隧道并断开所有连接。</p>
+        <div class="modal-action">
+          <button class="btn btn-ghost" @click="deleteTunnelDialog?.close()">取消</button>
+          <button class="btn btn-error" :disabled="loading" @click="handleDelete">{{ loading ? '删除中...' : '确认删除' }}</button>
+        </div>
       </div>
     </dialog>
   </div>

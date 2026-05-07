@@ -10,5 +10,6 @@ const (
 )
 
 const (
-	MQ_TOPIC_NEW_TUNNEL = "new_tunnel"
+	MQ_TOPIC_NEW_TUNNEL  = "new_tunnel"
+	MQ_TOPIC_TUNNEL_CLOSE = "tunnel_close"
 )

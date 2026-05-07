@@ -43,6 +43,7 @@ func RegisterRoutes(api *gin.RouterGroup) {
 		clientApi.POST("/v2ray/sub", clientController.GenerateV2raySubscribeLink)
 		clientApi.GET("/:id/tunnel", tunnelController.List)
 		clientApi.POST("/:id/tunnel", tunnelController.Create)
+		clientApi.DELETE("/:id/tunnel/:tunnelId", tunnelController.Delete)
 	}
 }
 

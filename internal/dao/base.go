@@ -76,7 +76,9 @@ type ClientDao interface {
 type TunnelDao interface {
 	List(ctx context.Context) ([]*model.Tunnel, error)
 	Create(ctx context.Context, tunnel *model.Tunnel) error
+	GetByID(ctx context.Context, id uint64) (*model.Tunnel, error)
 	ListByClientID(ctx context.Context, clientId uint64) ([]*model.Tunnel, error)
+	Delete(ctx context.Context, id uint64) error
 }
 
 func Init() error {

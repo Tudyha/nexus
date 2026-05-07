@@ -10,7 +10,9 @@ import (
 	"github.com/Tudyha/nexus/internal/model"
 	"github.com/Tudyha/nexus/internal/mq"
 	constant "github.com/Tudyha/nexus/pkg/const"
+	"github.com/Tudyha/nexus/pkg/errcode"
 	"github.com/Tudyha/nexus/pkg/request"
+	"github.com/Tudyha/nexus/pkg/utils"
 )
 
 type tunnelService struct {
@@ -50,4 +52,20 @@ func (s *tunnelService) Create(ctx context.Context, clientId uint64, req *reques
 
 func (s *tunnelService) ListByClientID(ctx context.Context, clientId uint64) ([]*model.Tunnel, error) {
 	return s.tunnelDao.ListByClientID(ctx, clientId)
+}
+
+func (s *tunnelService) Delete(ctx context.Context, clientId uint64, tunnelId uint64) error {
+	tunnel, err := s.tunnelDao.GetByID(ctx, tunnelId)
+	if err != nil {
+		return errcode.ErrNotFound
+	}
+	if tunnel.ClientID != clientId {
+		return errcode.ErrNotFound
+	}
+	if err := s.tunnelDao.Delete(ctx, tunnelId); err != nil {
+		return err
+	}
+	return s.pub.Publish(constant.MQ_TOPIC_TUNNEL_CLOSE, &message.Message{
+		Payload: []byte(utils.Uint64ToString(tunnelId)),
+	})
 }

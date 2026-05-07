@@ -5,6 +5,7 @@ import (
 	"github.com/Tudyha/nexus/pkg/errcode"
 	"github.com/Tudyha/nexus/pkg/request"
 	"github.com/Tudyha/nexus/pkg/response"
+	"github.com/Tudyha/nexus/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
 )
@@ -52,4 +53,23 @@ func (h *TunnelController) List(ctx *gin.Context) {
 	var list []response.TunnelResponse
 	copier.Copy(&list, tunnels)
 	response.Success(ctx, list)
+}
+
+func (h *TunnelController) Delete(ctx *gin.Context) {
+	clientId := getClientID(ctx)
+	if clientId == 0 {
+		response.Fail(ctx, errcode.ErrInvalidParams)
+		return
+	}
+	tunnelId := utils.StringToUint64(ctx.Param("tunnelId"))
+
+	if tunnelId == 0 {
+		response.Fail(ctx, errcode.ErrInvalidParams)
+		return
+	}
+	if err := h.tunnelService.Delete(ctx, clientId, tunnelId); err != nil {
+		response.Fail(ctx, err)
+		return
+	}
+	response.Success(ctx, nil)
 }

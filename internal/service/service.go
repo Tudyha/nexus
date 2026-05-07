@@ -61,6 +61,7 @@ type TunnelService interface {
 	List(ctx context.Context) ([]*model.Tunnel, error)
 	Create(ctx context.Context, clientId uint64, tunnel *request.TunnelCreateRequest) error
 	ListByClientID(ctx context.Context, clientId uint64) ([]*model.Tunnel, error)
+	Delete(ctx context.Context, clientId uint64, tunnelId uint64) error
 }
 
 func Init() error {

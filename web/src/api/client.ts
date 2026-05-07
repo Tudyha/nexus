@@ -33,3 +33,7 @@ export async function getClientTunnel(id: number): Promise<ClientTunnelResponse[
 export async function createClientTunnel(id: number, data: Record<string, any>): Promise<void> {
   return http.post(`/v1/client/${id}/tunnel`, data);
 }
+
+export async function deleteClientTunnel(clientId: number, tunnelId: number): Promise<void> {
+  return http.delete(`/v1/client/${clientId}/tunnel/${tunnelId}`);
+}

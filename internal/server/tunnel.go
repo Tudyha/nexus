@@ -16,6 +16,7 @@ import (
 	"github.com/Tudyha/nexus/pkg/errcode"
 	nexusio "github.com/Tudyha/nexus/pkg/io"
 	"github.com/Tudyha/nexus/pkg/proto"
+	"github.com/Tudyha/nexus/pkg/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -27,6 +28,7 @@ type TunnelServer struct {
 }
 
 type tunnel struct {
+	id         uint64 // 隧道id
 	clientID   uint64 // 客户端id
 	network    string // 网络类型 tcp/udp
 	localAddr  string // 本地地址
@@ -84,7 +86,34 @@ func (s *TunnelServer) subscribe() error {
 			msg.Ack()
 		}
 	}()
+
+	// 订阅隧道关闭事件
+	closeSub, err := s.pub.Subscribe(context.Background(), constant.MQ_TOPIC_TUNNEL_CLOSE)
+	if err != nil {
+		return err
+	}
+	go func() {
+		for msg := range closeSub {
+			tunnelId := utils.StringToUint64(string(msg.Payload))
+			if tunnelId == 0 {
+				continue
+			}
+			s.deleteTunnel(tunnelId)
+			msg.Ack()
+		}
+	}()
 	return nil
+}
+
+func (s *TunnelServer) deleteTunnel(tunnelId uint64) {
+	for i, t := range s.tunnels {
+		if t.id == tunnelId {
+			t.stop()
+			s.tunnels = append(s.tunnels[:i], s.tunnels[i+1:]...)
+			log.Info().Uint64("tunnel_id", tunnelId).Msg("tunnel closed")
+			return
+		}
+	}
 }
 
 func (s *TunnelServer) initTunnels() error {
@@ -110,6 +139,7 @@ func (s *TunnelServer) registerTunnel(t *model.Tunnel) *tunnel {
 
 	localAddr := net.JoinHostPort("0.0.0.0", fmt.Sprintf("%d", t.LocalPort))
 	tt := &tunnel{
+		id:         t.ID,
 		clientID:   t.ClientID,
 		network:    network,
 		localAddr:  localAddr,

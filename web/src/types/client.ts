@@ -49,6 +49,7 @@ export type ClientResponse = {
   created_at: Date;
   updated_at: Date;
   task: TaskExecutionResponse | null;
+  has_upgrade: boolean;
 }
 
 export type ClientSystemInfoResponse = {

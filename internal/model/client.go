@@ -12,6 +12,7 @@ type Client struct {
 	// 应用信息
 	AppID          uint64            `gorm:"column:app_id;not null"`     // 应用id
 	Version        uint32            `gorm:"column:version"`             // client版本号
+		VersionName    string            `gorm:"column:version_name"`        // client版本名称
 	SessionID      string            `gorm:"column:session_id;not null"` // 连接id
 	Status         enum.ClientStatus `gorm:"column:status"`              // 连接状态
 	LastOnlineTime time.Time         `gorm:"column:last_online_time"`    // 最后一次连接时间

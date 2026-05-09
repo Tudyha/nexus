@@ -29,6 +29,7 @@ import (
 type ClientController struct {
 	clientService  service.ClientService
 	appService     service.AppService
+	versionService service.VersionService
 	sessionManager session.Manager
 }
 
@@ -36,6 +37,7 @@ func newClientController() *ClientController {
 	return &ClientController{
 		clientService:  service.GetClientService(),
 		appService:     service.GetAppService(),
+		versionService: service.GetVersionService(),
 		sessionManager: session.GetManager(),
 	}
 }
@@ -98,11 +100,29 @@ func (h *ClientController) GetBind(ctx *gin.Context) {
 
 	c := utils.Base64Encode(data)
 
+	// 查询各平台最新版本
+	type osArch struct{ os, arch string }
+	targets := map[string]osArch{
+		"mac":   {"darwin", "amd64"},
+		"linux": {"linux", "amd64"},
+		"win":   {"windows", "amd64"},
+	}
+
+	latestMap := make(map[string]string)
+	for key, t := range targets {
+		v, err := h.versionService.GetLatestByOS(ctx, t.os, t.arch)
+		if err == nil && v != nil {
+			latestMap[key] = strings.TrimPrefix(v.BinaryPath, "tmp/")
+		}
+	}
+
 	sh := "curl -s http://%s:%d/%s -o /tmp/nexus-cli && chmod +x /tmp/nexus-cli && /tmp/nexus-cli run -d -c %s"
-	response.Success(ctx, response.ClientBindResponse{
-		MacBind:   fmt.Sprintf(sh, cfg.Server.Host, cfg.Server.HTTP.Port, "nexus-cli-darwin-amd64", c),
-		LinuxBind: fmt.Sprintf(sh, cfg.Server.Host, cfg.Server.HTTP.Port, "nexus-cli-linux-amd64", c),
-	})
+	res := response.ClientBindResponse{
+		MacBind:     fmt.Sprintf(sh, cfg.Server.Host, cfg.Server.HTTP.Port, latestMap["mac"], c),
+		LinuxBind:   fmt.Sprintf(sh, cfg.Server.Host, cfg.Server.HTTP.Port, latestMap["linux"], c),
+		WindowsBind: fmt.Sprintf(sh, cfg.Server.Host, cfg.Server.HTTP.Port, latestMap["win"], c),
+	}
+	response.Success(ctx, res)
 }
 
 // 获取客户端详情
@@ -114,7 +134,6 @@ func (h *ClientController) GetByID(ctx *gin.Context) {
 	}
 	var res response.ClientResponse
 	copier.Copy(&res, client)
-	res.VersionName = "v1.0.0"
 	response.Success(ctx, res)
 }
 

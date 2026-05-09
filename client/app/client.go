@@ -13,6 +13,7 @@ import (
 	"github.com/Tudyha/nexus/client/handler"
 	"github.com/Tudyha/nexus/pkg/conn"
 	"github.com/Tudyha/nexus/pkg/proto"
+	"github.com/Tudyha/nexus/client/version"
 	"github.com/Tudyha/nexus/pkg/utils"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -199,6 +200,8 @@ func (c *Client) handshake(netConn net.Conn) error {
 		Timestamp:  ts,
 		Nonce:      nonce,
 		Signature:  sig,
+		Version:    version.Version,
+		VersionName: version.VersionName,
 		ClientInfo: info,
 	}
 

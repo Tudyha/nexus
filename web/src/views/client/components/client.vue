@@ -158,6 +158,23 @@ const handleDelete = () => {
             {{ info.value }}
           </span>
         </div>
+        <!-- 版本信息 -->
+        <div v-if="item.version > 0"
+          class="flex items-center justify-between text-xs p-1 rounded -mx-1 mt-1.5 bg-base-200/20">
+          <div class="flex items-center gap-1.5 text-base-content/60">
+            <Icon icon="mdi:tag-outline" class="w-3.5 h-3.5 opacity-70" />
+            <span class="text-[11px]">版本</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="font-medium text-base-content/90">{{ item.version_name || 'v' + item.version }}</span>
+            <div v-if="item.has_upgrade"
+              class="badge badge-warning badge-xs gap-1 border-0 text-[10px] font-semibold cursor-pointer"
+              :title="`有新版本可升级`" @click.stop="handleUpgrade(false)">
+              <Icon icon="mdi:arrow-up-bold-circle-outline" class="w-3 h-3" />
+              可升级
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 

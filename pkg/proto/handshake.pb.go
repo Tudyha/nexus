@@ -24,12 +24,13 @@ const (
 // ─── Handshake ────────────────────────────────────────────────────────────────
 type HandshakeReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	AppId         int64                  `protobuf:"varint,1,opt,name=app_id,json=appId,proto3" json:"app_id,omitempty"`               // 应用id
-	Timestamp     int64                  `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`                    // unix 毫秒
-	Nonce         string                 `protobuf:"bytes,3,opt,name=nonce,proto3" json:"nonce,omitempty"`                             // 随机数，防重放攻击
-	Signature     string                 `protobuf:"bytes,4,opt,name=signature,proto3" json:"signature,omitempty"`                     // 签名：HMAC-SHA256(nonce + timestamp, app_secret)，防重放攻击
-	Version       int32                  `protobuf:"varint,5,opt,name=version,proto3" json:"version,omitempty"`                        // Client 版本，Server 可用于决策兼容性
-	ClientInfo    *ClientInfo            `protobuf:"bytes,6,opt,name=client_info,json=clientInfo,proto3" json:"client_info,omitempty"` // 新增：Client 相关信息
+	AppId         int64                  `protobuf:"varint,1,opt,name=app_id,json=appId,proto3" json:"app_id,omitempty"`                  // 应用id
+	Timestamp     int64                  `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`                       // unix 毫秒
+	Nonce         string                 `protobuf:"bytes,3,opt,name=nonce,proto3" json:"nonce,omitempty"`                                // 随机数，防重放攻击
+	Signature     string                 `protobuf:"bytes,4,opt,name=signature,proto3" json:"signature,omitempty"`                        // 签名：HMAC-SHA256(nonce + timestamp, app_secret)，防重放攻击
+	Version       int32                  `protobuf:"varint,5,opt,name=version,proto3" json:"version,omitempty"`                           // Client 版本，Server 可用于决策兼容性
+	VersionName   string                 `protobuf:"bytes,7,opt,name=version_name,json=versionName,proto3" json:"version_name,omitempty"` // Client 版本名称，如 "v1.2.3"
+	ClientInfo    *ClientInfo            `protobuf:"bytes,6,opt,name=client_info,json=clientInfo,proto3" json:"client_info,omitempty"`    // 新增：Client 相关信息
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -97,6 +98,13 @@ func (x *HandshakeReq) GetVersion() int32 {
 		return x.Version
 	}
 	return 0
+}
+
+func (x *HandshakeReq) GetVersionName() string {
+	if x != nil {
+		return x.VersionName
+	}
+	return ""
 }
 
 func (x *HandshakeReq) GetClientInfo() *ClientInfo {
@@ -334,13 +342,14 @@ var File_handshake_proto protoreflect.FileDescriptor
 
 const file_handshake_proto_rawDesc = "" +
 	"\n" +
-	"\x0fhandshake.proto\x12\tnexus.pkg\"\xc9\x01\n" +
+	"\x0fhandshake.proto\x12\tnexus.pkg\"\xec\x01\n" +
 	"\fHandshakeReq\x12\x15\n" +
 	"\x06app_id\x18\x01 \x01(\x03R\x05appId\x12\x1c\n" +
 	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\x12\x14\n" +
 	"\x05nonce\x18\x03 \x01(\tR\x05nonce\x12\x1c\n" +
 	"\tsignature\x18\x04 \x01(\tR\tsignature\x12\x18\n" +
-	"\aversion\x18\x05 \x01(\x05R\aversion\x126\n" +
+	"\aversion\x18\x05 \x01(\x05R\aversion\x12!\n" +
+	"\fversion_name\x18\a \x01(\tR\vversionName\x126\n" +
 	"\vclient_info\x18\x06 \x01(\v2\x15.nexus.pkg.ClientInfoR\n" +
 	"clientInfo\"\x0e\n" +
 	"\fHandshakeRes\"\xa3\x04\n" +

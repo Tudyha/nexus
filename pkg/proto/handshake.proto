@@ -10,7 +10,8 @@ message HandshakeReq {
   int64  timestamp = 2; // unix 毫秒
   string nonce     = 3; // 随机数，防重放攻击
   string signature = 4; // 签名：HMAC-SHA256(nonce + timestamp, app_secret)，防重放攻击
-  int32  version   = 5; // Client 版本，Server 可用于决策兼容性
+  int32  version      = 5; // Client 版本，Server 可用于决策兼容性
+  string version_name = 7; // Client 版本名称，如 "v1.2.3"
 
   ClientInfo client_info = 6; // 新增：Client 相关信息
 }

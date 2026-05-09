@@ -63,9 +63,9 @@ func (h *HandshakeHandler) Handle(ctx conn.Context) error {
 	sessionId := getSessionId(ctx)
 
 	client.Version = uint32(req.Version)
+	client.VersionName = req.VersionName
 	client.SessionID = sessionId
 	client.AppID = uint64(req.AppId)
-	client.Version = uint32(req.Version)
 
 	remoteAddr := ctx.GetConn().RemoteAddr()
 	remoteIP, port, err := net.SplitHostPort(remoteAddr.String())

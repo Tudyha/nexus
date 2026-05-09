@@ -62,10 +62,6 @@ func (c *clientService) GetPage(ctx context.Context, appID uint64, query *reques
 	}
 	var list []response.ClientResponse
 	copier.Copy(&list, clients)
-	for index := range list {
-		list[index].VersionName = "v1.0.0"
-	}
-
 	// 附加最新任务执行记录
 	var clientIDs []uint64
 	for _, client := range clients {
@@ -89,6 +85,13 @@ func (c *clientService) GetPage(ctx context.Context, appID uint64, query *reques
 					}
 				}
 			}
+		}
+	}
+
+	// 检查可升级版本
+	for i := range list {
+		if latest, err := GetVersionService().GetLatestByOS(ctx, list[i].Os, list[i].Arch); err == nil {
+			list[i].HasUpgrade = latest.Version > list[i].Version
 		}
 	}
 

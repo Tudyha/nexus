@@ -3,8 +3,11 @@ package utils
 import (
 	"crypto/md5"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"strconv"
@@ -59,4 +62,28 @@ func MD5(str string) string {
 func FileExists(path string) bool {
 	_, err := os.Stat(path)
 	return !os.IsNotExist(err)
+}
+
+func Checksum(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func VerifyChecksum(path, expected string) error {
+	got, err := Checksum(path)
+	if err != nil {
+		return err
+	}
+	if got != expected {
+		return fmt.Errorf("checksum mismatch: got %s, expected %s", got, expected)
+	}
+	return nil
 }

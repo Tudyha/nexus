@@ -246,3 +246,48 @@ func (s *Session) execute(msgType proto.MessageType) error {
 func (s *Session) Exit() error {
 	return s.execute(proto.MessageType_EXIT)
 }
+
+// SendTask 发送任务到客户端，在同一个 smux 流上读取进度上报
+func (s *Session) SendTask(taskID uint64, taskType proto.TaskType, payload []byte, reportProgress bool, onProgress func(*proto.TaskProgress)) error {
+	if s.status.Load() != StatusReady {
+		return errcode.ErrClientNotReady
+	}
+
+	stream, err := s.session.OpenStream()
+	if err != nil {
+		return err
+	}
+
+	c := conn.NewConn(stream)
+	defer c.Close()
+
+	req := &proto.Task{
+		TaskId:         taskID,
+		TaskType:       taskType,
+		ReportProgress: reportProgress,
+		Payload:        payload,
+	}
+
+	if err := c.WriteMessage(proto.MessageType_TASK, req); err != nil {
+		return err
+	}
+
+	// 循环读取 TASK_PROGRESS 直到 done=true 或 EOF
+	for {
+		msg, err := c.ReadMessage()
+		if err != nil {
+			// EOF 或连接断开，客户端已完成通信
+			return nil
+		}
+		var progress proto.TaskProgress
+		if err := c.Unmarshal(msg.Payload, &progress); err != nil {
+			return err
+		}
+		if onProgress != nil {
+			onProgress(&progress)
+		}
+		if progress.Done {
+			return nil
+		}
+	}
+}

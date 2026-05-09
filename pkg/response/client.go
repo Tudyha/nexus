@@ -38,6 +38,7 @@ type ClientResponse struct {
 	HostId          string            `json:"host_id"`   // 主机id
 	Uid             string            `json:"uid"`       // 用户id
 	CpuCount        int               `json:"cpu_count"` // cpu核数
+	Task            *TaskExecutionResponse `json:"task"`
 }
 
 type ClientBindResponse struct {

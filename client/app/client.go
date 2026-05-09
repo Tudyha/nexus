@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"sync/atomic"
 	"time"
 
@@ -24,6 +25,8 @@ type Client struct {
 	connected       atomic.Bool
 	heartbeatStream net.Conn // 心跳流
 
+	restartCh chan struct{} // 升级完成后通知主循环重启
+
 	handlers   map[proto.MessageType]conn.MessageHandler // 消息处理器
 	sysHandler *handler.SysHandler
 }
@@ -37,9 +40,7 @@ func NewClient(cfg *config.Config) *Client {
 	if cfg.HeartbeatInterval == 0 {
 		cfg.HeartbeatInterval = 30
 	}
-	if cfg.Version == 0 {
-		cfg.Version = 1
-	}
+
 	if cfg.ConnectTimeout == 0 {
 		cfg.ConnectTimeout = 10
 	}
@@ -49,11 +50,19 @@ func NewClient(cfg *config.Config) *Client {
 	exitHandler := handler.NewExitHandler()
 	a := &Client{
 		cfg:        cfg,
+		restartCh:  make(chan struct{}, 1),
 		handlers:   make(map[proto.MessageType]conn.MessageHandler),
 		sysHandler: sysHandler,
 	}
+	taskHandler := handler.NewTaskHandler(func() {
+		select {
+		case a.restartCh <- struct{}{}:
+		default:
+		}
+	})
 	a.handlers[tunnelHandler.Type()] = tunnelHandler
 	a.handlers[exitHandler.Type()] = exitHandler
+	a.handlers[taskHandler.Type()] = taskHandler
 	return a
 }
 
@@ -72,6 +81,10 @@ func (c *Client) Run(ctx context.Context) {
 				select {
 				case <-ctx.Done():
 					return
+				case <-c.restartCh:
+					c.cleanup()
+					c.doRestart()
+					return
 				case <-time.After(reconnectInterval):
 					continue
 				}
@@ -82,6 +95,10 @@ func (c *Client) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			c.cleanup()
+			return
+		case <-c.restartCh:
+			c.cleanup()
+			c.doRestart()
 			return
 		case <-time.After(healthCheckInterval):
 			// 健康检查: session 是否关闭
@@ -104,6 +121,24 @@ func (c *Client) cleanup() {
 		c.session = nil
 		c.heartbeatStream = nil
 	}
+}
+
+// doRestart 启动新进程替换当前进程
+func (c *Client) doRestart() {
+	exe, err := os.Executable()
+	if err != nil {
+		log.Error().Err(err).Msg("获取可执行文件路径失败")
+		return
+	}
+	cmd := exec.Command(exe, os.Args[1:]...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	if err := cmd.Start(); err != nil {
+		log.Error().Err(err).Msg("重启进程失败")
+		return
+	}
+	log.Info().Msg("新进程已启动")
 }
 
 // connect 尝试连接服务器
@@ -164,7 +199,6 @@ func (c *Client) handshake(netConn net.Conn) error {
 		Timestamp:  ts,
 		Nonce:      nonce,
 		Signature:  sig,
-		Version:    c.cfg.Version,
 		ClientInfo: info,
 	}
 

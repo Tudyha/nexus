@@ -39,7 +39,7 @@ func NewConnContext(ctx context.Context, conn *Conn, message *proto.Message) Con
 }
 
 func (c *connContext) Unmarshal(v any) error {
-	return c.conn.unmarshal(c.message.Payload, v)
+	return c.conn.Unmarshal(c.message.Payload, v)
 }
 
 func (c *connContext) Hijack() (io.ReadWriteCloser, error) {

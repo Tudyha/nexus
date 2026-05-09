@@ -63,7 +63,7 @@ func (c *Conn) Write(b []byte) (int, error) {
 	return c.netConn.Write(b)
 }
 
-func (c *Conn) unmarshal(b []byte, v any) error {
+func (c *Conn) Unmarshal(b []byte, v any) error {
 	return c.codec.Unmarshal(b, v)
 }
 

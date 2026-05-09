@@ -14,11 +14,14 @@ import (
 var (
 	once sync.Once
 
-	appDaoInstance       AppDao
-	clientDaoInstance    ClientDao
-	userDaoInstance      UserDao
-	workspaceDaoInstance WorkspaceDao
-	tunnelDaoInstance    TunnelDao
+	appDaoInstance           AppDao
+	clientDaoInstance        ClientDao
+	userDaoInstance          UserDao
+	workspaceDaoInstance     WorkspaceDao
+	tunnelDaoInstance        TunnelDao
+	versionDaoInstance       VersionDao
+	taskDaoInstance          TaskDao
+	taskExecutionDaoInstance TaskExecutionDao
 )
 
 func Paginate(pageQuery request.PageQuery) func(db *gorm.DB) *gorm.DB {
@@ -81,6 +84,27 @@ type TunnelDao interface {
 	Delete(ctx context.Context, id uint64) error
 }
 
+type VersionDao interface {
+	Create(ctx context.Context, version *model.Version) error
+	GetByID(ctx context.Context, id uint64) (*model.Version, error)
+	GetLatestByOS(ctx context.Context, os, arch string) (*model.Version, error)
+	GetPage(ctx context.Context, query request.PageQuery) ([]*model.Version, int64, error)
+	Delete(ctx context.Context, id uint64) error
+}
+
+type TaskDao interface {
+	Create(ctx context.Context, task *model.Task) error
+	GetByID(ctx context.Context, id uint64) (*model.Task, error)
+}
+
+type TaskExecutionDao interface {
+	Create(ctx context.Context, execs []*model.TaskExecution) error
+	Update(ctx context.Context, exec *model.TaskExecution) error
+	GetByID(ctx context.Context, id uint64) (*model.TaskExecution, error)
+	GetLatestByClientID(ctx context.Context, clientID uint64) (*model.TaskExecution, error)
+	GetLatestByClientIDs(ctx context.Context, clientIDs []uint64) (map[uint64]*model.TaskExecution, error)
+}
+
 func Init() error {
 	db := database.GetDB()
 	once.Do(func() {
@@ -89,6 +113,9 @@ func Init() error {
 		userDaoInstance = newUserDao(db)
 		workspaceDaoInstance = newWorkspaceDao(db)
 		tunnelDaoInstance = newTunnelDao(db)
+		versionDaoInstance = newVersionDao(db)
+		taskDaoInstance = newTaskDao(db)
+		taskExecutionDaoInstance = newTaskExecutionDao(db)
 	})
 	return nil
 }
@@ -111,4 +138,16 @@ func GetWorkspaceDao() WorkspaceDao {
 
 func GetTunnelDao() TunnelDao {
 	return tunnelDaoInstance
+}
+
+func GetVersionDao() VersionDao {
+	return versionDaoInstance
+}
+
+func GetTaskDao() TaskDao {
+	return taskDaoInstance
+}
+
+func GetTaskExecutionDao() TaskExecutionDao {
+	return taskExecutionDaoInstance
 }

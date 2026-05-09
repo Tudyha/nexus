@@ -65,6 +65,33 @@ func (c *clientService) GetPage(ctx context.Context, appID uint64, query *reques
 	for index := range list {
 		list[index].VersionName = "v1.0.0"
 	}
+
+	// 附加最新任务执行记录
+	var clientIDs []uint64
+	for _, client := range clients {
+		clientIDs = append(clientIDs, client.ID)
+	}
+	if len(clientIDs) > 0 {
+		if execMap, err := dao.GetTaskExecutionDao().GetLatestByClientIDs(ctx, clientIDs); err == nil {
+			for i := range list {
+				if exec, ok := execMap[list[i].ID]; ok {
+					list[i].Task = &response.TaskExecutionResponse{
+						ID:        exec.ID,
+						TaskID:    exec.TaskID,
+						ClientID:  exec.ClientID,
+						TaskType:  exec.TaskType,
+						Status:    exec.Status,
+						Progress:  exec.Progress,
+						Message:   exec.Message,
+						Error:     exec.Error,
+						CreatedAt: exec.CreatedAt,
+						UpdatedAt: exec.UpdatedAt,
+					}
+				}
+			}
+		}
+	}
+
 	return &response.Page[response.ClientResponse]{
 		Total: total,
 		List:  list,

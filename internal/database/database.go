@@ -60,7 +60,18 @@ func Init() error {
 		sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
 		sqlDB.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetime) * time.Second)
 
-		db.AutoMigrate(&model.App{}, &model.Client{}, &model.ClientStat{}, &model.User{}, &model.Workspace{}, &model.WorkspaceUser{}, &model.Tunnel{})
+		db.AutoMigrate(
+			&model.App{},
+			&model.Client{},
+			&model.ClientStat{},
+			&model.User{},
+			&model.Workspace{},
+			&model.WorkspaceUser{},
+			&model.Tunnel{},
+			&model.Version{},
+			&model.Task{},
+			&model.TaskExecution{},
+		)
 
 	})
 

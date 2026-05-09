@@ -10,8 +10,10 @@ import (
 	"strings"
 
 	"github.com/Tudyha/nexus/internal/config"
+	"github.com/Tudyha/nexus/internal/model"
 	"github.com/Tudyha/nexus/internal/service"
 	"github.com/Tudyha/nexus/internal/session"
+	"github.com/Tudyha/nexus/pkg/enum"
 	"github.com/Tudyha/nexus/pkg/errcode"
 	nexusio "github.com/Tudyha/nexus/pkg/io"
 	"github.com/Tudyha/nexus/pkg/proto"
@@ -21,6 +23,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/jinzhu/copier"
+	pb "google.golang.org/protobuf/proto"
 )
 
 type ClientController struct {
@@ -130,8 +133,8 @@ func (h *ClientController) Delete(ctx *gin.Context) {
 	response.Success(ctx, nil)
 }
 
-// pty伪终端
-func (h *ClientController) OpenPty(ctx *gin.Context) {
+// 在线终端
+func (h *ClientController) Terminal(ctx *gin.Context) {
 	client, err := h.clientService.GetByID(ctx, getClientID(ctx))
 	if err != nil {
 		response.Fail(ctx, err)
@@ -210,4 +213,97 @@ func (h *ClientController) GenerateV2raySubscribeLink(ctx *gin.Context) {
 	}
 
 	response.Success(ctx, res)
+}
+
+// 客户端升级
+func (h *VersionController) Upgrade(ctx *gin.Context) {
+	clientID := getClientID(ctx)
+	if clientID == 0 {
+		response.Fail(ctx, errcode.ErrInvalidParams)
+		return
+	}
+
+	force := ctx.DefaultQuery("force", "false") == "true"
+
+	latest, err := h.versionService.GetLatestForClient(ctx, clientID)
+	if err != nil {
+		response.Fail(ctx, err)
+		return
+	}
+
+	client, err := service.GetClientService().GetByID(ctx, clientID)
+	if err != nil {
+		response.Fail(ctx, errcode.ErrClientNotFound)
+		return
+	}
+
+	sess, err := h.sessionManager.GetSession(client.SessionID)
+	if err != nil {
+		response.Fail(ctx, errcode.ErrVersionNotReady)
+		return
+	}
+
+	// 创建任务
+	execs, err := h.taskService.CreateTask(ctx, 1, []uint64{clientID}) // 1: UPGRADE
+	if err != nil {
+		response.Fail(ctx, errcode.ErrVersionUpgrade)
+		return
+	}
+	exec := execs[0]
+
+	// 构造下载地址（拉取升级）
+	cfg := config.Get()
+	downloadURL := fmt.Sprintf("http://%s:%d/%s",
+		cfg.Server.Host, cfg.Server.HTTP.Port, strings.Replace(latest.BinaryPath, "tmp/", "", -1))
+
+	// 返回 task_id 给前端
+	response.Success(ctx, gin.H{"task_id": exec.TaskID})
+
+	// goroutine 异步执行
+	go func() {
+		payload := &proto.UpgradePayload{
+			Version:     latest.Version,
+			VersionName: latest.VersionName,
+			Checksum:    latest.Checksum,
+			BinarySize:  latest.BinarySize,
+			DownloadUrl: downloadURL,
+			Force:       force,
+		}
+		b, _ := pb.Marshal(payload)
+
+		done := false
+
+		if err := sess.SendTask(exec.ID, proto.TaskType_UPGRADE, b, true, func(p *proto.TaskProgress) {
+			update := &model.TaskExecution{
+				Progress: p.Progress,
+				Message:  p.Message,
+			}
+			update.ID = exec.ID
+			if p.Done {
+				done = true
+				if p.Success {
+					update.Status = enum.TaskStatusSuccess // done
+				} else {
+					update.Status = enum.TaskStatusFailed // failed
+					update.Error = p.Error
+				}
+			}
+			h.taskService.UpdateExecution(ctx, update)
+		}); err != nil {
+			h.taskService.UpdateExecution(ctx, &model.TaskExecution{
+				BaseModel: model.BaseModel{ID: exec.ID},
+				Status:    enum.TaskStatusFailed,
+				Error:     err.Error(),
+			})
+			return
+		}
+		if !done {
+			// 如果任务未完成就退出了，标记为中断
+			h.taskService.UpdateExecution(ctx, &model.TaskExecution{
+				BaseModel: model.BaseModel{ID: exec.ID},
+				Status:    enum.TaskStatusInterrupt,
+				Error:     "task interrupted",
+			})
+		}
+	}()
 }

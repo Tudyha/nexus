@@ -36,7 +36,9 @@ const (
 	MessageType_TUNNEL_OPEN     MessageType = 31 // 创建 tunnel
 	MessageType_TUNNEL_OPEN_ACK MessageType = 32 // 创建 tunnel 响应
 	// 命令消息
-	MessageType_EXIT MessageType = 41 // 退出程序
+	MessageType_EXIT          MessageType = 41 // 退出程序
+	MessageType_TASK          MessageType = 42 // 下发任务
+	MessageType_TASK_PROGRESS MessageType = 43 // 任务进度上报
 )
 
 // Enum value maps for MessageType.
@@ -51,6 +53,8 @@ var (
 		31: "TUNNEL_OPEN",
 		32: "TUNNEL_OPEN_ACK",
 		41: "EXIT",
+		42: "TASK",
+		43: "TASK_PROGRESS",
 	}
 	MessageType_value = map[string]int32{
 		"ENVELOPE_TYPE_UNKNOWN": 0,
@@ -62,6 +66,8 @@ var (
 		"TUNNEL_OPEN":           31,
 		"TUNNEL_OPEN_ACK":       32,
 		"EXIT":                  41,
+		"TASK":                  42,
+		"TASK_PROGRESS":         43,
 	}
 )
 
@@ -199,7 +205,7 @@ var File_common_proto protoreflect.FileDescriptor
 
 const file_common_proto_rawDesc = "" +
 	"\n" +
-	"\fcommon.proto\x12\tnexus.pkg*\xac\x01\n" +
+	"\fcommon.proto\x12\tnexus.pkg*\xc9\x01\n" +
 	"\vMessageType\x12\x19\n" +
 	"\x15ENVELOPE_TYPE_UNKNOWN\x10\x00\x12\r\n" +
 	"\tHANDSHAKE\x10\x01\x12\x11\n" +
@@ -210,7 +216,9 @@ const file_common_proto_rawDesc = "" +
 	"DISCONNECT\x10\x05\x12\x0f\n" +
 	"\vTUNNEL_OPEN\x10\x1f\x12\x13\n" +
 	"\x0fTUNNEL_OPEN_ACK\x10 \x12\b\n" +
-	"\x04EXIT\x10)*<\n" +
+	"\x04EXIT\x10)\x12\b\n" +
+	"\x04TASK\x10*\x12\x11\n" +
+	"\rTASK_PROGRESS\x10+*<\n" +
 	"\tErrorCode\x12\x16\n" +
 	"\x12ERROR_CODE_UNKNOWN\x10\x00\x12\v\n" +
 	"\aSUCCESS\x10\x01\x12\n" +

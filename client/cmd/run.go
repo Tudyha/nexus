@@ -31,9 +31,6 @@ var (
 
 	daemonFlag   bool
 	configBase64 string
-
-	version     = 1        // 版本号
-	versionName = "v1.0.0" // 版本名称
 )
 
 var runCmd = &cobra.Command{

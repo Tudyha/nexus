@@ -3,6 +3,19 @@ export type ClientBindResponse = {
   linux_bind: string;
 }
 
+export type TaskExecutionResponse = {
+  id: number;
+  task_id: number;
+  client_id: number;
+  task_type: number;
+  status: number; // 0: pending, 1: running, 2: done, 3: failed
+  progress: number;
+  message: string;
+  error: string;
+  created_at: number;
+  updated_at: number;
+}
+
 export type ClientResponse = {
   id: number;
   app_id: number;
@@ -35,6 +48,7 @@ export type ClientResponse = {
   last_online_time: number;
   created_at: Date;
   updated_at: Date;
+  task: TaskExecutionResponse | null;
 }
 
 export type ClientSystemInfoResponse = {

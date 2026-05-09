@@ -21,7 +21,7 @@ func newClientDao(db *gorm.DB) ClientDao {
 }
 
 func (c *clientDao) Create(ctx context.Context, client *model.Client) error {
-	return c.db.Save(client).Error
+	return c.db.WithContext(ctx).Save(client).Error
 }
 
 func (c *clientDao) GetByDeviceID(ctx context.Context, deviceID string) (*model.Client, error) {

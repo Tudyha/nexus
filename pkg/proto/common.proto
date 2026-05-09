@@ -19,7 +19,9 @@ enum MessageType {
   TUNNEL_OPEN_ACK = 32; // 创建 tunnel 响应
 
   // 命令消息
-  EXIT = 41; // 退出程序
+  EXIT    = 41; // 退出程序
+  TASK = 42; // 下发任务
+  TASK_PROGRESS = 43; // 任务进度上报
 }
 
 // 错误码

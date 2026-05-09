@@ -33,7 +33,10 @@ func Fail(ctx *gin.Context, err error) {
 }
 
 func FailWithMsg(ctx *gin.Context, err error, msg string) {
-	code, msg := getErrorMsg(err)
+	code, errMsg := getErrorMsg(err)
+	if msg == "" {
+		msg = errMsg
+	}
 
 	ctx.JSON(http.StatusOK, Response{
 		Code: code,

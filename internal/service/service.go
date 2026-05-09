@@ -10,12 +10,14 @@ import (
 )
 
 var (
-	appServiceInstance    AppService
-	clientServiceInstance ClientService
-	smsServiceInstance    SmsService
-	userServiceInstance   UserService
-	authServiceInstance   AuthService
-	tunnelServiceInstance TunnelService
+	appServiceInstance     AppService
+	clientServiceInstance  ClientService
+	smsServiceInstance     SmsService
+	userServiceInstance    UserService
+	authServiceInstance    AuthService
+	tunnelServiceInstance  TunnelService
+	versionServiceInstance VersionService
+	taskServiceInstance    TaskService
 )
 
 // AppService 应用服务接口
@@ -64,6 +66,25 @@ type TunnelService interface {
 	Delete(ctx context.Context, clientId uint64, tunnelId uint64) error
 }
 
+// VersionService 版本管理服务接口
+type VersionService interface {
+	Upload(ctx context.Context, version uint32, versionName, os, arch, changelog, binaryPath, fileName string) error
+	GetPage(ctx context.Context, query request.PageQuery) (*response.Page[response.VersionResponse], error)
+	GetByID(ctx context.Context, id uint64) (*model.Version, error)
+	Delete(ctx context.Context, id uint64) error
+	GetLatestByOS(ctx context.Context, os, arch string) (*model.Version, error)
+	GetLatestForClient(ctx context.Context, clientID uint64) (*model.Version, error)
+}
+
+// TaskService 任务服务接口
+type TaskService interface {
+	CreateTask(ctx context.Context, taskType int32, clientIDs []uint64) ([]*model.TaskExecution, error)
+	UpdateExecution(ctx context.Context, exec *model.TaskExecution) error
+	GetExecutionByID(ctx context.Context, id uint64) (*model.TaskExecution, error)
+	GetLatestByClientID(ctx context.Context, clientID uint64) (*model.TaskExecution, error)
+	GetLatestByClientIDs(ctx context.Context, clientIDs []uint64) (map[uint64]*model.TaskExecution, error)
+}
+
 func Init() error {
 	appServiceInstance = newAppService()
 	clientServiceInstance = newClientService()
@@ -71,6 +92,8 @@ func Init() error {
 	userServiceInstance = newUserService()
 	authServiceInstance = newAuthService(smsServiceInstance, userServiceInstance)
 	tunnelServiceInstance = newTunnelService()
+	versionServiceInstance = newVersionService()
+	taskServiceInstance = newTaskService()
 	return nil
 }
 
@@ -96,4 +119,12 @@ func GetAuthService() AuthService {
 
 func GetTunnelService() TunnelService {
 	return tunnelServiceInstance
+}
+
+func GetVersionService() VersionService {
+	return versionServiceInstance
+}
+
+func GetTaskService() TaskService {
+	return taskServiceInstance
 }

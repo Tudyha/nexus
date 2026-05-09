@@ -14,6 +14,12 @@
         </router-link>
       </li>
       <li>
+        <router-link :to="{ name: 'VersionList' }" active-class="bg-primary text-primary-content shadow-md" class="group">
+          <Icon icon="mdi:package-up" class="w-5 h-5 group-hover:scale-110 transition-transform" />
+          <span class="font-medium">版本管理</span>
+        </router-link>
+      </li>
+      <li>
         <router-link :to="{ name: 'UserList' }" active-class="bg-primary text-primary-content shadow-md" class="group">
           <Icon icon="mdi:playlist-play" class="w-5 h-5 group-hover:scale-110 transition-transform" />
           <span class="font-medium">用户列表</span>

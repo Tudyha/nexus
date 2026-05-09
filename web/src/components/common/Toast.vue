@@ -27,12 +27,12 @@ const getIcon = (type: string) => {
 </script>
 
 <template>
-  <div class="toast toast-top toast-end z-[9999]">
+  <div class="toast toast-top toast-center z-9999">
     <TransitionGroup name="toast">
-      <div v-for="toast in toasts" :key="toast.id" class="alert shadow-lg mb-2 py-3 px-4 min-w-[300px]"
+      <div v-for="toast in toasts" :key="toast.id" class="alert shadow-lg mb-2 py-3 px-4 min-w-75"
         :class="getAlertClass(toast.type)">
         <div class="flex items-center gap-2">
-          <Icon :icon="getIcon(toast.type)" class="w-5 h-5 flex-shrink-0" />
+          <Icon :icon="getIcon(toast.type)" class="w-5 h-5 shrink-0" />
           <span class="text-sm font-medium">{{ toast.message }}</span>
         </div>
       </div>

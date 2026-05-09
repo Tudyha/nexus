@@ -2,6 +2,7 @@ export * from "./user";
 export * from "./common";
 export * from "./client";
 export * from "./dashboard";
+export * from "./version";
 
 export type BaseResponse<T> = {
   code: number;

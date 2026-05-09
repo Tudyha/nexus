@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package nexus.pkg;
+
+option go_package = "github.com/Tudyha/nexus/pkg/proto/proto";
+
+enum TaskType {
+  TASK_TYPE_UNKNOWN = 0;
+  UPGRADE           = 1;
+  BATCH_COMMAND     = 2;
+}
+
+message Task {
+  uint64   task_id          = 1;
+  TaskType task_type        = 2;
+  bool     report_progress  = 3;
+  bytes    payload          = 4;
+}
+
+message TaskProgress {
+  uint64   task_id   = 1;
+  int32    progress  = 2;
+  string   message   = 3;
+  bool     done      = 4;
+  bool     success   = 5;
+  string   error     = 6;
+}
+
+message UpgradePayload {
+  uint32 version       = 1;
+  string version_name  = 2;
+  string checksum      = 3;
+  int64  binary_size   = 4;
+  string download_url  = 5;
+  bool   force         = 6;
+}

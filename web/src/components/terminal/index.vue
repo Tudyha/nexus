@@ -40,7 +40,7 @@ const initXterm = () => {
   const u = useUserStore();
 
   // 建立 WebSocket 连接
-  const wsUrl = `${VITE_WS_API_BASE_URL}/v1/client/${props.id}/pty?token=${u.token}`;
+  const wsUrl = `${VITE_WS_API_BASE_URL}/v1/client/${props.id}/terminal?token=${u.token}`;
 
   ws = new WebSocket(wsUrl);
   ws.binaryType = 'arraybuffer'

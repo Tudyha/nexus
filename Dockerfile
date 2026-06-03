@@ -35,8 +35,8 @@ RUN go env -w CGO_CFLAGS='-O2 -g -D_LARGEFILE64_SOURCE'
 WORKDIR /app
 
 # 前端构建
-COPY ./web/package.json ./web/package-lock.json ./web/
-RUN cd ./web && npm ci
+COPY ./web/package.json ./web/
+RUN cd ./web && npm install
 COPY ./web/ ./web/
 RUN cd ./web && npm run build
 

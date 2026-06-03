@@ -116,7 +116,7 @@ func (h *ClientController) GetBind(ctx *gin.Context) {
 		}
 	}
 
-	sh := "curl -s http://%s:%d/%s -o /tmp/nexus-cli && chmod +x /tmp/nexus-cli && /tmp/nexus-cli run -d -c %s"
+	sh := "cd /tmp && curl -s http://%s:%d/%s -o nexus-cli && chmod +x ./nexus-cli && ./nexus-cli run -d -c %s"
 	res := response.ClientBindResponse{
 		MacBind:     fmt.Sprintf(sh, cfg.Server.Host, cfg.Server.HTTP.Port, latestMap["mac"], c),
 		LinuxBind:   fmt.Sprintf(sh, cfg.Server.Host, cfg.Server.HTTP.Port, latestMap["linux"], c),

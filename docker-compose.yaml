@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   nexus-server:
-    build: .
+    image: registry.cn-guangzhou.aliyuncs.com/knodio/nexus
     container_name: nexus-server
     restart: unless-stopped
     network_mode: "host"

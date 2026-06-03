@@ -9,6 +9,7 @@ services:
     volumes:
       - nexus-data:/app/data
       - nexus-logs:/app/logs
+      - nexus-tmp:/app/tmp
       - ./configs:/app/configs:ro
     environment:
       - TZ=Asia/Shanghai
@@ -24,3 +25,4 @@ services:
 volumes:
   nexus-data:
   nexus-logs:
+  nexus-tmp:

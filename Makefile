@@ -36,14 +36,19 @@ docker-push: docker
 	docker push registry.cn-guangzhou.aliyuncs.com/knodio/nexus:latest
 
 # === 客户端交叉编译 ===
+# 用法: make build-client-all VERSION=1 VERSION_NAME=v1.0.0
+# VERSION 和 VERSION_NAME 均为可选，不指定时版本默认为 0，版本名称为空
 .PHONY: build-client-all
 
+LD_FLAGS = -X github.com/Tudyha/nexus/client/version.VersionStr=$(VERSION) -X github.com/Tudyha/nexus/client/version.VersionName=$(VERSION_NAME)
+LD_FLAGS_EMPTY = -X github.com/Tudyha/nexus/client/version.VersionStr= -X github.com/Tudyha/nexus/client/version.VersionName=
+
 build-client-all:
-	cd client && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o ../build/nexus-cli-darwin-amd64 ./main.go
-	cd client && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o ../build/nexus-cli-darwin-arm64 ./main.go
-	cd client && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../build/nexus-cli-linux-amd64 ./main.go
-	cd client && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o ../build/nexus-cli-linux-arm64 ./main.go
-	cd client && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o ../build/nexus-cli-windows-amd64.exe ./main.go
+	cd client && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$(if $(VERSION),$(LD_FLAGS),$(LD_FLAGS_EMPTY))" -o ../build/nexus-cli-darwin-amd64$(if $(VERSION_NAME),-$(VERSION_NAME)) ./main.go
+	cd client && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$(if $(VERSION),$(LD_FLAGS),$(LD_FLAGS_EMPTY))" -o ../build/nexus-cli-darwin-arm64$(if $(VERSION_NAME),-$(VERSION_NAME)) ./main.go
+	cd client && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(if $(VERSION),$(LD_FLAGS),$(LD_FLAGS_EMPTY))" -o ../build/nexus-cli-linux-amd64$(if $(VERSION_NAME),-$(VERSION_NAME)) ./main.go
+	cd client && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$(if $(VERSION),$(LD_FLAGS),$(LD_FLAGS_EMPTY))" -o ../build/nexus-cli-linux-arm64$(if $(VERSION_NAME),-$(VERSION_NAME)) ./main.go
+	cd client && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$(if $(VERSION),$(LD_FLAGS),$(LD_FLAGS_EMPTY))" -o ../build/nexus-cli-windows-amd64$(if $(VERSION_NAME),-$(VERSION_NAME)).exe ./main.go
 
 # === Web 前端 ===
 .PHONY: web-install web-dev web-build

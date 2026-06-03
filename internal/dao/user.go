@@ -43,3 +43,12 @@ func (d *userDao) FindByUsername(ctx context.Context, username string) (*model.U
 	}
 	return &user, nil
 }
+
+func (d *userDao) List(ctx context.Context, page, pageSize int) ([]*model.User, int64, error) {
+	var users []*model.User
+	var total int64
+	d.db.Model(&model.User{}).Count(&total)
+	offset := (page - 1) * pageSize
+	err := d.db.Offset(offset).Limit(pageSize).Order("id desc").Find(&users).Error
+	return users, total, err
+}

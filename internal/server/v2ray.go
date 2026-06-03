@@ -43,6 +43,7 @@ type v2rayServer struct {
 	config   *core.Config   // v2ray config
 	instance *core.Instance // v2ray instance
 	sub      *gochannel.GoChannel
+	stopCh   chan struct{}
 }
 
 func NewV2rayServer() Server {
@@ -53,6 +54,7 @@ func NewV2rayServer() Server {
 	s.logpath = cfg.Server.V2ray.LogPath
 	s.config = initConfig(s.addr, s.logpath)
 	s.sub = mq.GetPubSub()
+	s.stopCh = make(chan struct{})
 
 	return s
 }
@@ -91,7 +93,7 @@ func initConfig(addr string, logpath string) *core.Config {
 					Listen:    net.NewIPOrDomain(net.ParseAddress(host)),
 				}),
 				ProxySettings: serial.ToTypedMessage(&vmessInbound.SimplifiedConfig{
-					Users: []string{"efdbb141-a181-417a-bdc6-c0ca00ad3f2a"},
+					Users: []string{},
 				}),
 				Tag: inbound_tag,
 			},
@@ -122,6 +124,7 @@ func (v *v2rayServer) Start() error {
 }
 
 func (v *v2rayServer) Stop() error {
+	close(v.stopCh)
 	if v.instance != nil {
 		if err := v.instance.Close(); err != nil {
 			return err
@@ -138,33 +141,50 @@ func (v *v2rayServer) subscribe() {
 func (v *v2rayServer) subscribeClientOnline() {
 	messages, err := v.sub.Subscribe(context.Background(), constant.MQ_TOPIC_CLIENT_ONLINE)
 	if err != nil {
+		zeroLog.Error().Err(err).Msg("v2ray: subscribe client online failed")
 		return
 	}
-	for msg := range messages {
-		clientSessionId := string(msg.Payload)
-		zeroLog.Info().Str("clientSessionId", clientSessionId).Msg("v2ray receive mq client online msg")
-		v.addVMessUser(clientSessionId)
-
-		// we need to Acknowledge that we received and processed the message,
-		// otherwise, it will be resent over and over again.
-		msg.Ack()
+	for {
+		select {
+		case msg, ok := <-messages:
+			if !ok {
+				return
+			}
+			clientSessionId := string(msg.Payload)
+			zeroLog.Info().Str("clientSessionId", clientSessionId).Msg("v2ray receive mq client online msg")
+			if err := v.addVMessUser(clientSessionId); err != nil {
+				zeroLog.Error().Err(err).Str("sessionId", clientSessionId).Msg("v2ray: add vmess user failed")
+			}
+			msg.Ack()
+		case <-v.stopCh:
+			return
+		}
 	}
 }
 
 func (v *v2rayServer) subscribeClientOffline() {
 	messages, err := v.sub.Subscribe(context.Background(), constant.MQ_TOPIC_CLIENT_OFFLINE)
 	if err != nil {
+		zeroLog.Error().Err(err).Msg("v2ray: subscribe client offline failed")
 		return
 	}
-	for msg := range messages {
-		clientSessionId := string(msg.Payload)
-		zeroLog.Info().Str("clientSessionId", clientSessionId).Msg("v2ray receive mq client offline msg")
+	for {
+		select {
+		case msg, ok := <-messages:
+			if !ok {
+				return
+			}
+			clientSessionId := string(msg.Payload)
+			zeroLog.Info().Str("clientSessionId", clientSessionId).Msg("v2ray receive mq client offline msg")
 
-		v.removeVMessUser(clientSessionId)
+			if err := v.removeVMessUser(clientSessionId); err != nil {
+				zeroLog.Error().Err(err).Str("sessionId", clientSessionId).Msg("v2ray: remove vmess user failed")
+			}
 
-		// we need to Acknowledge that we received and processed the message,
-		// otherwise, it will be resent over and over again.
-		msg.Ack()
+			msg.Ack()
+		case <-v.stopCh:
+			return
+		}
 	}
 }
 

@@ -18,6 +18,38 @@ func newTaskController() *TaskController {
 	}
 }
 
+func (h *TaskController) Create(ctx *gin.Context) {
+	var req struct {
+		TaskType  int32    `json:"task_type" binding:"required,oneof=1 2"`
+		ClientIDs []uint64 `json:"client_ids" binding:"required,min=1"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.FailWithMsg(ctx, nil, "参数错误: "+err.Error())
+		return
+	}
+	execs, err := h.taskService.CreateTask(ctx, req.TaskType, req.ClientIDs)
+	if err != nil {
+		response.Fail(ctx, err)
+		return
+	}
+	var list []response.TaskExecutionResponse
+	for _, e := range execs {
+		list = append(list, response.TaskExecutionResponse{
+			ID:        e.ID,
+			TaskID:    e.TaskID,
+			ClientID:  e.ClientID,
+			TaskType:  e.TaskType,
+			Status:    e.Status,
+			Progress:  e.Progress,
+			Message:   e.Message,
+			Error:     e.Error,
+			CreatedAt: e.CreatedAt,
+			UpdatedAt: e.UpdatedAt,
+		})
+	}
+	response.Success(ctx, list)
+}
+
 // GetExecution 获取任务执行记录
 func (h *TaskController) GetExecution(ctx *gin.Context) {
 	taskID := utils.StringToUint64(ctx.Param("taskId"))

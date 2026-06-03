@@ -70,6 +70,26 @@ func (s *userService) Detail(ctx context.Context, id uint64) (*response.UserResp
 	return &userResp, nil
 }
 
+func (s *userService) List(ctx context.Context, page, pageSize int) (*response.Page[response.UserItem], error) {
+	users, total, err := s.userDao.List(ctx, page, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	var items []response.UserItem
+	for _, u := range users {
+		items = append(items, response.UserItem{
+			ID:        u.ID,
+			Username:  u.Username,
+			Nickname:  u.Nickname,
+			Phone:     u.Phone,
+			Email:     u.Email,
+			Status:    u.Status,
+			CreatedAt: u.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+	return &response.Page[response.UserItem]{Total: total, List: items}, nil
+}
+
 func (s *userService) GetSpaceList(ctx context.Context, userID uint64) ([]*response.WorkspaceResponse, error) {
 	spaceList, err := s.workSpaceDao.GetByUserID(ctx, userID)
 	if err != nil || len(spaceList) == 0 {

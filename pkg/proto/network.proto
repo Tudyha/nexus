@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package nexus.pkg;
+
+option go_package = "github.com/Tudyha/nexus/pkg/proto/proto";
+
+message NetworkListReq {
+}
+
+message Network {
+  int32  pid          = 1;
+  string process_name = 2;
+  string protocol     = 3;
+  string local_addr   = 4;
+  string remote_addr  = 5;
+  string status       = 6;
+}
+
+message NetworkListResp {
+  repeated Network list = 1;
+}

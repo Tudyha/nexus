@@ -8,6 +8,7 @@ enum TaskType {
   TASK_TYPE_UNKNOWN = 0;
   UPGRADE           = 1;
   BATCH_COMMAND     = 2;
+  INSTALL_APP       = 3;
 }
 
 message Task {

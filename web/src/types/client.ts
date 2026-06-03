@@ -66,6 +66,7 @@ export type ClientSystemInfoResponse = {
 
 export type ClientTunnelResponse = {
   id: number;
+  client_id: number;
   tunnel_type: 1 | 2; // 1:tcp, 2:udp
   local_port: number; // local port
   remote_addr: string; // remote address, format: ip:port

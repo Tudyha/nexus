@@ -75,13 +75,22 @@ func (h *HandshakeHandler) Handle(ctx conn.Context) error {
 	client.RemoteIP = remoteIP
 	client.Port = port
 	client.RemoteIpCountry = ip.GetIPCountry(client.RemoteIP)
-	if err := h.clientService.Connect(ctx, &client); err != nil {
+	err = h.clientService.Connect(ctx, &client)
+	if err != nil {
 		return err
 	}
 
-	h.pub.Publish(constant.MQ_TOPIC_CLIENT_ONLINE, &message.Message{
+	// 发送握手响应
+	if err = ctx.GetConn().WriteMessage(proto.MessageType_HANDSHAKE_ACK, &proto.Response{}); err != nil {
+		return err
+	}
+
+	// 发布客户端上线消息
+	if err := h.pub.Publish(constant.MQ_TOPIC_CLIENT_ONLINE, &message.Message{
 		Payload: []byte(sessionId),
-	})
+	}); err != nil {
+		log.Error().Err(err).Str("sessionId", sessionId).Msg("publish client online event failed")
+	}
 
 	return nil
 }

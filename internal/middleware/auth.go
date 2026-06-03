@@ -1,8 +1,11 @@
 package middleware
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"time"
 
+	"github.com/Tudyha/nexus/internal/config"
 	"github.com/Tudyha/nexus/internal/model"
 	"github.com/Tudyha/nexus/internal/service"
 	constant "github.com/Tudyha/nexus/pkg/const"
@@ -14,14 +17,22 @@ import (
 	"github.com/appleboy/gin-jwt/v3/core"
 	"github.com/gin-gonic/gin"
 	gojwt "github.com/golang-jwt/jwt/v5"
+	"github.com/rs/zerolog/log"
 )
 
 var (
-	ginJwt      *jwt.GinJWTMiddleware
-	authService service.AuthService
+	ginJwt           *jwt.GinJWTMiddleware
+	authService      service.AuthService
+	jwtSecretKey     []byte
 )
 
-func initAuthMiddleware() error {
+func initAuthMiddleware(jwtSecret string) error {
+	key, err := resolveJWTSecret(jwtSecret)
+	if err != nil {
+		return err
+	}
+	jwtSecretKey = key
+
 	jm, err := jwt.New(initParams())
 	if err != nil {
 		return err
@@ -31,13 +42,37 @@ func initAuthMiddleware() error {
 	return nil
 }
 
+// resolveJWTSecret 获取 JWT 密钥，如果未配置则从数据库 DSN 派生稳定密钥。
+func resolveJWTSecret(secret string) ([]byte, error) {
+	if secret != "" {
+		return []byte(secret), nil
+	}
+	dns := config.Get().DB.DNS
+	if dns == "" {
+		dns = "nexus"
+	}
+	hash := sha256.Sum256([]byte(dns + "_nexus_jwt_secret"))
+	key := []byte(hex.EncodeToString(hash[:]))
+	log.Warn().Msg("JWT 密钥未配置，已从数据库 DSN 派生稳定密钥。建议通过 server.jwt_secret 或 NEXUS_SERVER_JWT_SECRET 配置。")
+	return key, nil
+}
+
 func Auth() gin.HandlerFunc {
-	return ginJwt.MiddlewareFunc()
+	jwtMiddleware := ginJwt.MiddlewareFunc()
+	return func(ctx *gin.Context) {
+		token := extractToken(ctx)
+		if token != "" && service.IsTokenBlacklisted(token) {
+			response.Fail(ctx, errcode.ErrUnauthorized)
+			ctx.Abort()
+			return
+		}
+		jwtMiddleware(ctx)
+	}
 }
 
 func initParams() *jwt.GinJWTMiddleware {
 	return &jwt.GinJWTMiddleware{
-		Key:             []byte("secret key"),
+		Key:             jwtSecretKey,
 		IdentityKey:     constant.HttpHeaderUserIDKey,
 		Timeout:         time.Hour * 24,     // JWT Token 的有效期
 		MaxRefresh:      time.Hour * 24 * 7, // 刷新 Token 的有效期
@@ -48,6 +83,23 @@ func initParams() *jwt.GinJWTMiddleware {
 		PayloadFunc:     payloadFunc(),
 		TokenLookup:     "header: Authorization, query: token, cookie: jwt",
 	}
+}
+
+// extractToken 从请求中提取 Token 字符串
+func extractToken(ctx *gin.Context) string {
+	// 优先从 Authorization header 提取
+	token := ctx.GetHeader("Authorization")
+	if token != "" {
+		return token
+	}
+	// 其次从 query 参数提取
+	token = ctx.Query("token")
+	if token != "" {
+		return token
+	}
+	// 最后从 cookie 提取
+	token, _ = ctx.Cookie("jwt")
+	return token
 }
 
 // 登录
@@ -79,7 +131,7 @@ func loginSuccess() func(ctx *gin.Context, token *core.Token) {
 // 登录失败
 func unauthorized() func(ctx *gin.Context, code int, message string) {
 	return func(ctx *gin.Context, code int, message string) {
-		response.Fail(ctx, errcode.ErrLoginFailed)
+		response.Fail(ctx, errcode.ErrUnauthorized)
 	}
 }
 

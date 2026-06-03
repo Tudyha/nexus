@@ -31,8 +31,11 @@ func (c *clientService) Connect(ctx context.Context, client *model.Client) error
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
+	} else if old != nil {
+		// 复用已有记录 ID，执行更新
+		client.ID = old.ID
+		client.CreatedAt = old.CreatedAt
 	}
-	client.ID = old.ID
 	client.Status = enum.ClientOnline
 	client.LastOnlineTime = time.Now()
 	return c.clientDao.Create(ctx, client)
@@ -118,4 +121,8 @@ func (c *clientService) DeleteByID(ctx context.Context, id uint64) (*model.Clien
 
 func (c *clientService) GetByIDs(ctx context.Context, ids []uint64) ([]*model.Client, error) {
 	return c.clientDao.GetByIDs(ctx, ids)
+}
+
+func (c *clientService) ListOnline(ctx context.Context, appID uint64) ([]*model.Client, error) {
+	return c.clientDao.ListOnlineByAppID(ctx, appID)
 }

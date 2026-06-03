@@ -3,14 +3,14 @@ module github.com/Tudyha/nexus
 go 1.25.5
 
 require (
-	github.com/ThreeDotsLabs/watermill v1.5.1
+	darvaza.org/x/net v0.7.0
+	github.com/ThreeDotsLabs/watermill v1.4.7
 	github.com/appleboy/gin-jwt/v3 v3.5.1
 	github.com/creack/pty v1.1.24
 	github.com/gin-gonic/gin v1.12.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/hpcloud/tail v1.0.0
 	github.com/jinzhu/copier v0.4.0
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/rs/zerolog v1.35.1
@@ -25,6 +25,25 @@ require (
 	google.golang.org/protobuf v1.36.11
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.1
+)
+
+require (
+	darvaza.org/core v0.19.0 // indirect
+	darvaza.org/slog v0.9.0 // indirect
+	darvaza.org/slog/handlers/discard v0.7.0 // indirect
+	darvaza.org/x/fs v0.6.0 // indirect
+	github.com/amery/defaults v0.1.0 // indirect
+	github.com/gobwas/glob v0.2.3 // indirect
+)
+
+require (
+	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/prometheus/client_golang v1.22.0
+	github.com/prometheus/client_model v0.6.1 // indirect
+	github.com/prometheus/common v0.62.0 // indirect
+	github.com/prometheus/procfs v0.15.1 // indirect
 )
 
 require (
@@ -97,7 +116,5 @@ require (
 	golang.org/x/text v0.36.0 // indirect
 	golang.org/x/tools v0.43.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260120221211-b8f7ae30c516 // indirect
-	gopkg.in/fsnotify.v1 v1.4.7 // indirect
-	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

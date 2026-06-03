@@ -6,6 +6,7 @@ import (
 	"github.com/Tudyha/nexus/internal/dao"
 	"github.com/Tudyha/nexus/internal/model"
 	"github.com/Tudyha/nexus/pkg/enum"
+	"github.com/Tudyha/nexus/pkg/proto"
 )
 
 type taskService struct {
@@ -57,4 +58,22 @@ func (s *taskService) GetLatestByClientID(ctx context.Context, clientID uint64) 
 
 func (s *taskService) GetLatestByClientIDs(ctx context.Context, clientIDs []uint64) (map[uint64]*model.TaskExecution, error) {
 	return s.taskExecutionDao.GetLatestByClientIDs(ctx, clientIDs)
+}
+
+// UpdateProgress 更新任务执行进度
+func (s *taskService) UpdateProgress(ctx context.Context, execID uint64, p *proto.TaskProgress) error {
+	update := &model.TaskExecution{
+		Progress: p.Progress,
+		Message:  p.Message,
+	}
+	update.ID = execID
+	if p.Done {
+		if p.Success {
+			update.Status = enum.TaskStatusSuccess // done
+		} else {
+			update.Status = enum.TaskStatusFailed // failed
+			update.Error = p.Error
+		}
+	}
+	return s.taskExecutionDao.Update(ctx, update)
 }

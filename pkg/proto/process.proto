@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package nexus.pkg;
+
+option go_package = "github.com/Tudyha/nexus/pkg/proto/proto";
+
+message ProcessListReq {
+}
+
+message Process {
+  int32  pid         = 1;
+  string name        = 2;
+  int32  ppid        = 3;
+  int32  threads     = 4;
+  string user        = 5;
+  double cpu_percent = 6;
+  double mem_percent = 7;
+  int64  mem_rss     = 8;
+  string status      = 9;
+  string start_time  = 10;
+}
+
+message ProcessListResp {
+  repeated Process list = 1;
+}
+
+message ProcessKillReq {
+  int32  pid    = 1;
+  int32  signal = 2; // 默认 15 (SIGTERM)
+}

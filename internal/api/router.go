@@ -3,10 +3,12 @@ package api
 import (
 	"net/http"
 	"path/filepath"
+	"strings"
 
 	v1 "github.com/Tudyha/nexus/internal/api/v1"
 	"github.com/Tudyha/nexus/pkg/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // RegisterRoutes 注册所有路由
@@ -26,6 +28,9 @@ func registerStaticRoutes(router *gin.Engine) {
 		})
 	})
 
+	// Prometheus 指标
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
 	// 静态文件
 	router.GET("/:name", func(ctx *gin.Context) {
 		filename := ctx.Params.ByName("name")
@@ -39,6 +44,16 @@ func registerStaticRoutes(router *gin.Engine) {
 		}
 
 		filename = filepath.Clean(filename)
+
+		// 防止路径遍历攻击
+		if filename == "" || strings.Contains(filename, "..") || filename[0] == '/' || filename[0] == '\\' {
+			ctx.JSON(http.StatusOK, gin.H{
+				"code": 400,
+				"msg":  "invalid filename",
+				"data": nil,
+			})
+			return
+		}
 
 		if utils.FileExists("./tmp/" + filename) {
 			ctx.File("./tmp/" + filename)

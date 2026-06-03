@@ -8,3 +8,14 @@ type UserResponse struct {
 
 	WorkspaceList []*WorkspaceResponse `json:"workspace_list"` // 工作空间列表
 }
+
+// UserItem 用户列表项
+type UserItem struct {
+	ID        uint64 `json:"id"`
+	Username  string `json:"username"`
+	Nickname  string `json:"nickname"`
+	Phone     string `json:"phone"`
+	Email     string `json:"email"`
+	Status    int    `json:"status"`
+	CreatedAt string `json:"created_at"`
+}

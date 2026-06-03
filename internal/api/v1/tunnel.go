@@ -21,22 +21,28 @@ func newTunnelController() *TunnelController {
 }
 
 func (h *TunnelController) Create(ctx *gin.Context) {
-	clientId := getClientID(ctx)
-	if clientId == 0 {
-		response.Fail(ctx, errcode.ErrInvalidParams)
-		return
-	}
 	var req request.TunnelCreateRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		response.FailWithMsg(ctx, errcode.ErrInvalidParams, err.Error())
 		return
 	}
-	err := h.tunnelService.Create(ctx, clientId, &req)
+	err := h.tunnelService.Create(ctx, uint64(req.ClientID), &req)
 	if err != nil {
 		response.Fail(ctx, err)
 		return
 	}
 	response.Success(ctx, nil)
+}
+
+func (h *TunnelController) ListAll(ctx *gin.Context) {
+	tunnels, err := h.tunnelService.List(ctx)
+	if err != nil {
+		response.Fail(ctx, err)
+		return
+	}
+	var list []response.TunnelResponse
+	copier.Copy(&list, tunnels)
+	response.Success(ctx, list)
 }
 
 func (h *TunnelController) List(ctx *gin.Context) {

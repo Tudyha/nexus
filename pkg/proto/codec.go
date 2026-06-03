@@ -39,20 +39,16 @@ type packet struct {
 
 func (c *codec) ReadMessage(r io.Reader) (*Message, error) {
 	p := new(packet)
-	if err := binary.Read(r, binary.BigEndian, &p.magic); err != nil {
-		return nil, fmt.Errorf("read magic: %w", err)
+	header := make([]byte, 8)
+	if _, err := io.ReadFull(r, header); err != nil {
+		return nil, fmt.Errorf("read header: %w", err)
 	}
+	p.magic = binary.BigEndian.Uint16(header[0:2])
+	p.version = header[2]
+	p.codecType = header[3]
+	p.length = binary.BigEndian.Uint32(header[4:8])
 	if p.magic != Magic {
 		return nil, fmt.Errorf("invalid magic: 0x%X", p.magic)
-	}
-	if err := binary.Read(r, binary.BigEndian, &p.version); err != nil {
-		return nil, fmt.Errorf("read version: %w", err)
-	}
-	if err := binary.Read(r, binary.BigEndian, &p.codecType); err != nil {
-		return nil, fmt.Errorf("read codec type: %w", err)
-	}
-	if err := binary.Read(r, binary.BigEndian, &p.length); err != nil {
-		return nil, fmt.Errorf("read length: %w", err)
 	}
 	if p.length > maxMessageSize {
 		return nil, fmt.Errorf("message too large: %d bytes", p.length)
@@ -80,27 +76,14 @@ func (c *codec) WriteMessage(w io.Writer, msg *Message) error {
 	if err != nil {
 		return fmt.Errorf("proto marshal: %w", err)
 	}
-	p := &packet{
-		magic:     Magic,
-		version:   Version,
-		codecType: 1,
-		length:    uint32(len(data)),
-		data:      data,
-	}
-	if err := binary.Write(w, binary.BigEndian, p.magic); err != nil {
-		return fmt.Errorf("write magic: %w", err)
-	}
-	if err := binary.Write(w, binary.BigEndian, p.version); err != nil {
-		return fmt.Errorf("write version: %w", err)
-	}
-	if err := binary.Write(w, binary.BigEndian, p.codecType); err != nil {
-		return fmt.Errorf("write codec type: %w", err)
-	}
-	if err := binary.Write(w, binary.BigEndian, p.length); err != nil {
-		return fmt.Errorf("write length: %w", err)
-	}
-	if _, err := w.Write(p.data); err != nil {
-		return fmt.Errorf("write data: %w", err)
+	buf := make([]byte, 8+len(data))
+	binary.BigEndian.PutUint16(buf[0:2], Magic)
+	buf[2] = Version
+	buf[3] = 1 // codecType: protobuf
+	binary.BigEndian.PutUint32(buf[4:8], uint32(len(data)))
+	copy(buf[8:], data)
+	if _, err := w.Write(buf); err != nil {
+		return fmt.Errorf("write message: %w", err)
 	}
 	return nil
 }

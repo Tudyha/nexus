@@ -10,7 +10,6 @@ import (
 	"github.com/Tudyha/nexus/pkg/response"
 	"github.com/Tudyha/nexus/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 type VersionController struct {
@@ -42,7 +41,7 @@ func (h *VersionController) Upload(ctx *gin.Context) {
 	}
 
 	// 保存上传的文件
-	dst := filepath.Join("./tmp/", uuid.NewString())
+	dst := filepath.Join("./data/", file.Filename)
 	ctx.SaveUploadedFile(file, dst)
 	if err := h.versionService.Upload(ctx, req.Version, req.VersionName, req.Os, req.Arch, req.Changelog, dst, file.Filename); err != nil {
 		response.FailWithMsg(ctx, errcode.ErrVersionCreateFail, err.Error())

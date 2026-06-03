@@ -84,3 +84,11 @@ func (c *clientDao) GetByIDs(ctx context.Context, ids []uint64) ([]*model.Client
 	var clients []*model.Client
 	return clients, c.db.WithContext(ctx).Where("id in ?", ids).Find(&clients).Error
 }
+
+func (c *clientDao) ListOnlineByAppID(ctx context.Context, appID uint64) ([]*model.Client, error) {
+	var clients []*model.Client
+	return clients, c.db.WithContext(ctx).
+		Where("app_id = ? AND status = ?", appID, enum.ClientOnline).
+		Order("id desc").
+		Find(&clients).Error
+}

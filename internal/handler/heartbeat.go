@@ -6,7 +6,6 @@ import (
 	"github.com/Tudyha/nexus/pkg/conn"
 	"github.com/Tudyha/nexus/pkg/enum"
 	"github.com/Tudyha/nexus/pkg/proto"
-	"github.com/rs/zerolog/log"
 )
 
 type HeartbeatHandler struct {
@@ -25,7 +24,6 @@ func (h *HeartbeatHandler) Handle(ctx conn.Context) error {
 		return err
 	}
 	sessionId := getSessionId(ctx)
-	log.Info().Str("sessionId", sessionId).Any("req", &req).Msg("heartbeat")
 
 	client, err := h.clientService.GetBySessionID(ctx, sessionId)
 	if err != nil {
@@ -61,7 +59,9 @@ func (h *HeartbeatHandler) Handle(ctx conn.Context) error {
 	if err := h.clientService.CreateClientStat(ctx, clientStat); err != nil {
 		return err
 	}
-	return nil
+
+	// 回复 ACK，让客户端感知服务端在线
+	return ctx.GetConn().WriteMessage(proto.MessageType_HEARTBEAT_ACK, &proto.Response{})
 }
 
 func (h *HeartbeatHandler) Type() proto.MessageType {

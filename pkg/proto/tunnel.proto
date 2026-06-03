@@ -11,6 +11,6 @@ message TunnelOpenReq {
   string     remote_addr = 2; // 隧道目标地址
 }
 
-message TunnelOpenAck {
+message TunnelOpenResp {
 
 }

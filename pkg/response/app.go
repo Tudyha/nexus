@@ -9,4 +9,7 @@ type AppResponse struct {
 	Description string     `json:"description"` // 应用描述
 	Status      int        `json:"status"`      // 应用状态
 	CreatedAt   *time.Time `json:"created_at"`  // 创建时间
+	AppSecret   string     `json:"app_secret"`  // HMAC 密钥
+	Config      string     `json:"config"`      // 客户端配置
+	WorkspaceID uint64     `json:"workspace_id"`
 }

@@ -6,6 +6,10 @@ export async function getClientPage(params: Record<string, any>): Promise<PageRe
   return http.get("/v1/client/page", params);
 }
 
+export async function getOnlineClients(): Promise<{ id: number; hostname: string }[]> {
+  return http.get("/v1/client/online");
+}
+
 export async function getClientBind(): Promise<ClientBindResponse> {
   return http.get("/v1/client/bind");
 }
@@ -30,10 +34,22 @@ export async function getClientTunnel(id: number): Promise<ClientTunnelResponse[
   return http.get(`/v1/client/${id}/tunnel`);
 }
 
-export async function createClientTunnel(id: number, data: Record<string, any>): Promise<void> {
-  return http.post(`/v1/client/${id}/tunnel`, data);
+export async function createClientTunnel(data: Record<string, any>): Promise<void> {
+  return http.post(`/v1/tunnel`, data);
 }
 
 export async function deleteClientTunnel(clientId: number, tunnelId: number): Promise<void> {
   return http.delete(`/v1/client/${clientId}/tunnel/${tunnelId}`);
+}
+
+export async function getAllTunnels(): Promise<ClientTunnelResponse[]> {
+  return http.get("/v1/tunnel/list");
+}
+
+export async function upgradeClient(id: number): Promise<void> {
+  return http.post(`/v1/client/${id}/upgrade`);
+}
+
+export async function createBatchTask(taskType: number, clientIds: number[]): Promise<any[]> {
+  return http.post("/v1/task/create", { task_type: taskType, client_ids: clientIds });
 }

@@ -60,6 +60,11 @@ func GetManager() Manager {
 	return managerInstance
 }
 
+// InitTestManager 初始化 session manager 实例（仅用于测试，不注册消息处理器）
+func InitTestManager() {
+	managerInstance = &manager{}
+}
+
 func (m *manager) GetSession(sessionId string) (*Session, error) {
 	session, ok := m.sessions.Load(sessionId)
 	if !ok {

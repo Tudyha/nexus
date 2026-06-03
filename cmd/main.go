@@ -22,11 +22,16 @@ func main() {
 		server.NewHTTPServer(),
 		server.NewTCPServer(),
 		server.NewV2rayServer(),
-		server.NewMonitor(),
 		server.NewTunnelServer(),
 	}
-	for _, s := range servers {
+	for i, s := range servers {
 		if err := s.Start(); err != nil {
+			// 启动失败时关闭已启动的服务器
+			for j := range i {
+				if e := servers[j].Stop(); e != nil {
+					log.Error().Err(e).Msg("server stop failed")
+				}
+			}
 			log.Fatal().Err(err).Msg("server start failed")
 		}
 	}
@@ -41,17 +46,40 @@ func main() {
 			log.Error().Err(err).Msg("server stop failed")
 		}
 	}
+	if err := mq.Close(); err != nil {
+		log.Error().Err(err).Msg("mq close failed")
+	}
 	log.Info().Msg("servers stopped")
 }
 
 func init() {
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
-
 	// init config
 	if err := config.Init("./configs/config.yaml"); err != nil {
 		log.Fatal().Err(err).Msg("config init failed")
 	}
-	log.Info().Any("config", config.Get()).Msg("config loaded")
+	cfg := config.Get()
+
+	// 根据环境配置日志格式
+	if cfg.Server.Env == "prod" {
+		log.Logger = zerolog.New(os.Stderr).With().Timestamp().Logger()
+	} else {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
+	}
+
+	// 配置日志级别
+	switch cfg.Server.LogLevel {
+	case "debug":
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	case "warn":
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	case "error":
+		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+	default:
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	}
+	log.Debug().Msg("log level set to " + cfg.Server.LogLevel)
+
+	log.Info().Any("config", cfg).Msg("config loaded")
 
 	// init database
 	if err := database.Init(); err != nil {

@@ -2,297 +2,207 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"os"
 	"os/exec"
-	"sync/atomic"
+	"sync"
 	"time"
 
+	"darvaza.org/x/net/reconnect"
 	"github.com/Tudyha/nexus/client/config"
 	"github.com/Tudyha/nexus/client/handler"
+	"github.com/Tudyha/nexus/client/session"
 	"github.com/Tudyha/nexus/pkg/conn"
 	"github.com/Tudyha/nexus/pkg/proto"
-	"github.com/Tudyha/nexus/client/version"
-	"github.com/Tudyha/nexus/pkg/utils"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/xtaci/smux/v2"
 )
 
 type Client struct {
-	cfg             *config.Config
-	session         *smux.Session
-	connected       atomic.Bool
-	heartbeatStream net.Conn // 心跳流
+	cfg *config.Config
 
-	restartCh chan struct{} // 升级完成后通知主循环重启
+	reconnector *reconnect.Client
 
-	handlers   map[proto.MessageType]conn.MessageHandler // 消息处理器
+	sess       *session.Session
+	registry   *handler.Registry
 	sysHandler *handler.SysHandler
+
+	preRestart func()
+
+	closeOnce sync.Once
 }
 
-// NewClient 创建一个新的客户端
-func NewClient(cfg *config.Config) *Client {
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
-	if cfg.ReconnectInterval == 0 {
-		cfg.ReconnectInterval = 10
-	}
-	if cfg.HeartbeatInterval == 0 {
-		cfg.HeartbeatInterval = 30
-	}
+type Options struct {
+	Middleware []handler.Middleware
+}
 
-	if cfg.ConnectTimeout == 0 {
-		cfg.ConnectTimeout = 10
-	}
-
-	sysHandler := handler.NewSysHandler()
-	tunnelHandler := handler.NewTunnelHandler()
-	exitHandler := handler.NewExitHandler()
-	a := &Client{
+func NewClient(ctx context.Context, cfg *config.Config, opts Options) (*Client, error) {
+	c := &Client{
 		cfg:        cfg,
-		restartCh:  make(chan struct{}, 1),
-		handlers:   make(map[proto.MessageType]conn.MessageHandler),
-		sysHandler: sysHandler,
+		sess:       session.New(cfg),
+		registry:   handler.NewRegistry(),
+		sysHandler: handler.NewSysHandler(),
 	}
-	taskHandler := handler.NewTaskHandler(func() {
-		select {
-		case a.restartCh <- struct{}{}:
-		default:
+
+	// 自动重连处理器
+	cli, err := reconnect.New(&reconnect.Config{
+		Context:        ctx,
+		Remote:         cfg.ServerAddr,
+		DialTimeout:    time.Duration(cfg.ConnectTimeout) * time.Second,
+		ReconnectDelay: time.Duration(cfg.ReconnectInterval) * time.Second,
+		OnConnect:      c.onConnect,
+		OnSession:      c.onSession,
+		OnDisconnect:   c.onDisconnect,
+		OnError:        c.onError,
+	})
+	c.reconnector = cli
+	if err != nil {
+		return nil, err
+	}
+
+	// 注册消息处理中间件
+	for _, mw := range opts.Middleware {
+		c.registry.Use(mw)
+	}
+
+	log.Info().Int("handler_count", c.registry.Len()).Msg("客户端初始化完成")
+	return c, nil
+}
+
+func (c *Client) Run() error {
+	log.Info().Str("server", c.cfg.ServerAddr).Msg("正在连接服务端...")
+	if err := c.reconnector.Connect(); err != nil {
+		return err
+	}
+	return c.reconnector.Wait()
+}
+
+func (c *Client) Shutdown() {
+	log.Info().Msg("正在关闭客户端...")
+	c.closeOnce.Do(func() {
+		if c.sess != nil {
+			c.sess.Close()
+		}
+		if c.reconnector != nil {
+			c.reconnector.Shutdown(context.Background())
 		}
 	})
-	a.handlers[tunnelHandler.Type()] = tunnelHandler
-	a.handlers[exitHandler.Type()] = exitHandler
-	a.handlers[taskHandler.Type()] = taskHandler
-	return a
 }
 
-// Run 运行客户端
-func (c *Client) Run(ctx context.Context) {
-	log.Info().Any("config", c.cfg).Msg("启动客户端")
+func (c *Client) onConnect(ctx context.Context, conn net.Conn) error {
+	log.Info().Msg("连接成功, 开始创建session")
+	info, err := c.sysHandler.Info()
+	if err != nil {
+		return err
+	}
+	return c.sess.Connect(ctx, conn, info)
+}
 
-	reconnectInterval := time.Duration(c.cfg.ReconnectInterval) * time.Second
-	healthCheckInterval := time.Duration(c.cfg.HeartbeatInterval) * time.Second
+func (c *Client) onSession(ctx context.Context) error {
+	log.Info().Msg("session 建立成功, 开始接收 stream")
+
+	go c.heartbeatLoop(ctx)
 
 	for {
-		// 断线重连
-		if !c.connected.Load() {
-			if err := c.connect(); err != nil {
-				log.Error().Err(err).Dur("reconnect_in", reconnectInterval).Msg("连接失败，稍后重试")
-				select {
-				case <-ctx.Done():
-					return
-				case <-c.restartCh:
-					c.cleanup()
-					c.doRestart()
-					return
-				case <-time.After(reconnectInterval):
-					continue
-				}
-			}
+		stream, err := c.sess.AcceptStream()
+		if err != nil {
+			log.Warn().Err(err).Msg("AcceptStream 退出, session 结束")
+			return err
 		}
+		log.Debug().Str("remote", stream.RemoteAddr().String()).Msg("收到新 stream")
+		go c.handleStream(ctx, stream)
+	}
+}
 
-		// 连接成功
+func (c *Client) onDisconnect(ctx context.Context, conn net.Conn) error {
+	log.Info().Msg("连接已断开, 关闭session")
+	return c.sess.Close()
+}
+
+func (c *Client) onError(ctx context.Context, conn net.Conn, err error) error {
+	log.Info().Err(err).Msg("连接异常")
+	return err
+}
+
+func (c *Client) handleStream(ctx context.Context, s net.Conn) {
+	co := conn.NewConn(s)
+
+	for {
+		message, err := co.ReadMessage()
+		if err != nil {
+			log.Debug().Err(err).Msg("stream 读取结束")
+			co.Close()
+			return
+		}
+		msgType := message.GetType()
+		log.Debug().Int("type", int(msgType)).Str("type_name", msgType.String()).Msg("收到消息")
+		connCtx := conn.NewConnContext(ctx, co, message)
+		if err := c.registry.Handle(connCtx, message); err != nil {
+			log.Warn().Err(err).Int("type", int(msgType)).Msg("handle message failed")
+		}
+		if connCtx.IsHijacked() {
+			log.Debug().Msg("stream 被劫持, 不再处理后续消息")
+			return
+		}
+	}
+}
+
+func (c *Client) heartbeatLoop(ctx context.Context) {
+	interval := time.Duration(c.cfg.HeartbeatInterval) * time.Second
+	log.Info().Dur("interval", interval).Msg("心跳 goroutine 启动")
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	defer log.Info().Msg("心跳 goroutine 退出")
+
+	for {
 		select {
+		case <-ticker.C:
+			c.sendHeartbeat()
+		case <-c.sess.Done():
+			return
 		case <-ctx.Done():
-			c.cleanup()
 			return
-		case <-c.restartCh:
-			c.cleanup()
-			c.doRestart()
-			return
-		case <-time.After(healthCheckInterval):
-			// 健康检查: session 是否关闭
-			if c.session == nil || c.session.IsClosed() {
-				log.Warn().Msg("session 已关闭，准备重连")
-				c.connected.Store(false)
-				c.cleanup()
-				continue
-			}
-			// 发送心跳包
-			c.heartbeat()
 		}
 	}
 }
 
-// cleanup 关闭 session 资源
-func (c *Client) cleanup() {
-	if c.session != nil {
-		c.session.Close()
-		c.session = nil
-		c.heartbeatStream = nil
+func (c *Client) sendHeartbeat() {
+	stream, err := c.sess.OpenStream()
+	if err != nil {
+		log.Error().Err(err).Msg("open heartbeat stream failed")
+		return
 	}
+	defer stream.Close()
+
+	stats, err := c.sysHandler.SystemStats()
+	if err != nil {
+		log.Error().Err(err).Msg("collect heartbeat data failed")
+		return
+	}
+
+	co := conn.NewConn(stream)
+	defer co.Close()
+	if err := co.WriteMessage(proto.MessageType_HEARTBEAT, stats); err != nil {
+		log.Error().Err(err).Msg("send heartbeat failed")
+		return
+	}
+	log.Debug().Msg("heartbeat sent")
 }
 
-// doRestart 启动新进程替换当前进程
-func (c *Client) doRestart() {
+func (c *Client) spawnNewProcess() {
+	if c.preRestart != nil {
+		c.preRestart()
+	}
 	exe, err := os.Executable()
 	if err != nil {
-		log.Error().Err(err).Msg("获取可执行文件路径失败")
+		log.Error().Err(err).Msg("get executable path failed")
 		return
 	}
 	cmd := exec.Command(exe, os.Args[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
 	if err := cmd.Start(); err != nil {
-		log.Error().Err(err).Msg("重启进程失败")
+		log.Error().Err(err).Msg("spawn new process failed")
 		return
 	}
-	log.Info().Msg("新进程已启动")
-}
-
-// connect 尝试连接服务器
-func (c *Client) connect() error {
-	var err error
-	connectTimeout := time.Duration(c.cfg.ConnectTimeout) * time.Second
-
-	netConn, err := net.DialTimeout("tcp", c.cfg.ServerAddr, connectTimeout)
-	if err != nil {
-		return fmt.Errorf("dial: %w", err)
-	}
-	defer func(cause error) {
-		if cause != nil {
-			netConn.Close()
-		}
-	}(err)
-
-	// 握手建立连接
-	if err = c.handshake(netConn); err != nil {
-		return err
-	}
-
-	// 握手成功，使用低延迟smux配置
-	session, err := smux.Client(netConn, &smux.Config{
-		KeepAliveInterval: 5 * time.Second,  // 心跳间隔
-		KeepAliveTimeout:  15 * time.Second, // 超时，需 ≥ Interval
-		MaxFrameSize:      65535,            // 最大允许值（64KB）
-		MaxReceiveBuffer:  2 * 1024 * 1024,  // 2MB
-		MaxStreamBuffer:   1 * 1024 * 1024,  // 1MB，需 ≤ MaxReceiveBuffer
-	})
-	if err != nil {
-		return fmt.Errorf("smux: %w", err)
-	}
-	c.session = session
-	c.connected.Store(true)
-
-	go c.acceptStream()
-	return nil
-
-}
-
-// handshake 握手
-func (c *Client) handshake(netConn net.Conn) error {
-	conn := conn.NewConn(netConn)
-
-	// 签名参数
-	nonce := utils.RandHex(16)
-	ts := time.Now().Unix()
-	sig := utils.SignConnectPayload(uint64(c.cfg.AppId), c.cfg.AppSecret, ts, nonce)
-
-	// 发送握手消息
-	info, err := c.sysHandler.Info()
-	if err != nil {
-		return err
-	}
-	handshakeMsg := &proto.HandshakeReq{
-		AppId:      c.cfg.AppId,
-		Timestamp:  ts,
-		Nonce:      nonce,
-		Signature:  sig,
-		Version:    version.Version,
-		VersionName: version.VersionName,
-		ClientInfo: info,
-	}
-
-	if err := conn.WriteMessage(proto.MessageType_HANDSHAKE, handshakeMsg); err != nil {
-		return fmt.Errorf("write handshake: %w", err)
-	}
-
-	// 读取握手响应
-	ack, err := conn.ReadMessage()
-	if err != nil {
-		return fmt.Errorf("read handshake ack: %w", err)
-	}
-	if ack.GetType() != proto.MessageType_HANDSHAKE_ACK {
-		return fmt.Errorf("unexpected handshake ack type: %v", ack.Type)
-	}
-
-	//TODO: 验证握手响应中的状态码
-
-	return nil
-}
-
-// acceptStream 接收子流
-func (c *Client) acceptStream() {
-	for {
-		stream, err := c.session.AcceptStream()
-		if err != nil {
-			log.Error().Err(err).Msg("AcceptStream 出错，session 可能已关闭")
-			c.connected.Store(false)
-			c.cleanup()
-			return
-		}
-		go c.handleStream(stream)
-	}
-}
-
-// handleStream 处理子流，根据消息类型调用相应的处理函数
-func (c *Client) handleStream(netConn net.Conn) {
-	co := conn.NewConn(netConn)
-
-	for {
-		message, err := co.ReadMessage()
-		if err != nil {
-			co.Close()
-			return
-		}
-
-		ctx := conn.NewConnContext(context.Background(), co, message)
-		h := c.handlers[message.GetType()]
-		if h == nil {
-			log.Info().Int("MessageType", int(message.GetType())).Msg("unknown message type")
-			continue
-		}
-
-		// 处理消息
-		if err := h.Handle(ctx); err != nil {
-			log.Error().Err(err).Msg("handle message error")
-			continue
-		}
-
-		if ctx.IsHijacked() {
-			// 内网穿透关键：如果子流被劫持，则不再处理后续消息，由劫持方负责数据传输
-			return
-		}
-	}
-}
-
-// heartbeat 发送心跳包
-func (c *Client) heartbeat() {
-	if !c.connected.Load() || c.session == nil || c.session.IsClosed() {
-		// 未连接，不发送心跳包
-		log.Info().Msg("未连接，不发送心跳包")
-		return
-	}
-	if c.heartbeatStream == nil {
-		heartbeatStream, err := c.session.OpenStream()
-		if err != nil {
-			log.Error().Err(err).Msg("OpenStream 出错，session 可能已关闭")
-			return
-		}
-		c.heartbeatStream = heartbeatStream
-	}
-
-	heartbeatReq, err := c.sysHandler.SystemStats()
-	if err != nil {
-		log.Error().Err(err).Msg("获取系统状态数据出错")
-		return
-	}
-
-	conn := conn.NewConn(c.heartbeatStream)
-
-	conn.WriteMessage(proto.MessageType_HEARTBEAT, heartbeatReq)
-
-	log.Info().Msg("发送心跳包成功")
+	log.Info().Int("pid", cmd.Process.Pid).Msg("new process started")
 }

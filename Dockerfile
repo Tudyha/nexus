@@ -34,37 +34,34 @@ RUN go env -w CGO_CFLAGS='-O2 -g -D_LARGEFILE64_SOURCE'
 
 WORKDIR /app
 
-# 打包前端文件
+# 前端构建
 COPY ./web/package.json ./web/package-lock.json ./web/
-RUN cd ./web && npm install
-
+RUN cd ./web && npm ci
 COPY ./web/ ./web/
 RUN cd ./web && npm run build
 
-# 构建go应用
+# Go 依赖缓存层
 COPY ./go.mod ./go.sum ./
 RUN go mod download
 
-# 复制源代码
+# Go 源代码
 COPY ./client ./client/
 COPY ./cmd ./cmd/
 COPY ./internal ./internal/
 COPY ./pkg ./pkg
 
-# 构建客户端
-RUN cd ./client && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o ./nexus-cli-darwin-amd64 ./main.go
-RUN cd ./client && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ./nexus-cli-linux-amd64 ./main.go
-
 # 构建服务端
 RUN go build -o ./app ./cmd/main.go
 
+# === 运行阶段 ===
 FROM alpine:latest
+
+RUN apk add --no-cache ca-certificates tzdata && \
+    rm -rf /var/cache/apk/*
 
 WORKDIR /app
 
 COPY --from=builder /app/web/dist ./web/dist
-COPY --from=builder /app/client/nexus-cli-darwin-amd64 ./build/nexus-cli-darwin-amd64
-COPY --from=builder /app/client/nexus-cli-linux-amd64 ./build/nexus-cli-linux-amd64
 COPY --from=builder /app/app /app/app
 COPY ./configs ./configs
 COPY ./pkg/ip/GeoLite2-Country.mmdb ./pkg/ip/GeoLite2-Country.mmdb
@@ -73,6 +70,9 @@ RUN mkdir -p ./logs ./data ./tmp
 
 EXPOSE 8080 8081 8082
 
-ENV NEXUS_SERVER_HOST=127.0.0.1
+ENV NEXUS_SERVER_HOST=0.0.0.0
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -qO- http://localhost:8080/health || exit 1
 
 CMD ["./app"]

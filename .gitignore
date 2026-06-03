@@ -1,16 +1,29 @@
+# Build artifacts
+build/
+bin/
+
+# Data & logs
 data/*
-
 logs/*
+tmp/*
 
+# Client runtime
+.pid
+.log
+
+# Web
 web/node_modules
 web/dist
 web/package-lock.json
 
-.roo
-
+# OS
 .DS_Store
 
+# IDE
+.roo
 .idea
 .vscode
 
-tmp/*
+# Env
+.env
+.env.local

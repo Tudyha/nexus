@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package nexus.pkg;
+
+option go_package = "github.com/Tudyha/nexus/pkg/proto/proto";
+
+message AppEntry {
+  string app_id     = 1;
+  string name       = 2;
+  string version    = 3; // 空字符串表示未安装
+  string category   = 4;
+  string icon       = 5;
+}
+
+message AppCheckReq {
+  // 要检测的应用 ID 列表，空表示检测所有
+  repeated string app_ids = 1;
+}
+
+message AppCheckResp {
+  repeated AppEntry entries = 1;
+}
+
+message AppInstallReq {
+  string app_id = 1;
+}

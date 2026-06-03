@@ -2,15 +2,22 @@ package utils
 
 import (
 	"crypto/md5"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math/big"
+	"math/rand/v2"
 	"os"
 	"strconv"
+	"strings"
+	"time"
+	"unicode"
+)
+
+const (
+	minBackoff = 1 * time.Second
+	maxBackoff = 60 * time.Second
 )
 
 // StringToUint64 字符串转uint64
@@ -24,8 +31,8 @@ func GenerateRandomNumber(length int) string {
 	const charset = "0123456789"
 	result := make([]byte, length)
 	for i := range result {
-		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
-		result[i] = charset[num.Int64()]
+		idx := rand.IntN(len(charset))
+		result[i] = charset[idx]
 	}
 	return string(result)
 }
@@ -35,8 +42,8 @@ func GenerateRandomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	result := make([]byte, length)
 	for i := range result {
-		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
-		result[i] = charset[num.Int64()]
+		idx := rand.IntN(len(charset))
+		result[i] = charset[idx]
 	}
 	return string(result)
 }
@@ -86,4 +93,70 @@ func VerifyChecksum(path, expected string) error {
 		return fmt.Errorf("checksum mismatch: got %s, expected %s", got, expected)
 	}
 	return nil
+}
+
+// ValidatePassword 校验密码强度，返回错误描述。
+// 规则：至少 8 位，包含大小写字母、数字、特殊字符。
+func ValidatePassword(password string) error {
+	var (
+		hasUpper   bool
+		hasLower   bool
+		hasDigit   bool
+		hasSpecial bool
+	)
+	if len(password) < 8 {
+		return fmt.Errorf("密码长度不能少于 8 位")
+	}
+	if len(password) > 128 {
+		return fmt.Errorf("密码长度不能超过 128 位")
+	}
+	for _, ch := range password {
+		switch {
+		case unicode.IsUpper(ch):
+			hasUpper = true
+		case unicode.IsLower(ch):
+			hasLower = true
+		case unicode.IsDigit(ch):
+			hasDigit = true
+		case unicode.IsPunct(ch) || unicode.IsSymbol(ch):
+			hasSpecial = true
+		}
+	}
+	var missing []string
+	if !hasUpper {
+		missing = append(missing, "大写字母")
+	}
+	if !hasLower {
+		missing = append(missing, "小写字母")
+	}
+	if !hasDigit {
+		missing = append(missing, "数字")
+	}
+	if !hasSpecial {
+		missing = append(missing, "特殊字符")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("密码必须包含：%s", strings.Join(missing, "、"))
+	}
+	return nil
+}
+
+// 返回下一次重连等待时间，指数退避 + jitter。
+func NextRetryDelay(retryAttempt int) time.Duration {
+	shift := retryAttempt - 1
+	if shift > 6 {
+		shift = 6
+	}
+	// 2^(shift) seconds: 1s, 2s, 4s, 8s, 16s, 32s, 64s(max→60s)
+	delay := minBackoff << shift
+	if delay > maxBackoff {
+		delay = maxBackoff
+	}
+	// ±25% jitter 避免 thundering herd
+	jitter := time.Duration(float64(delay) * (rand.Float64()*0.5 - 0.25))
+	delay += jitter
+	if delay < minBackoff {
+		delay = minBackoff
+	}
+	return delay
 }

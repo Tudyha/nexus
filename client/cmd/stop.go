@@ -8,10 +8,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// stopCmd represents the stop command
 var stopCmd = &cobra.Command{
 	Use:   "stop",
-	Short: "stop",
+	Short: "停止正在运行的客户端",
+	Long: `停止正在运行的 Nexus 客户端守护进程。
+
+发送 SIGTERM 信号到客户端进程，等待优雅退出。
+如果在超时后进程仍未退出，将强制终止（SIGKILL）。
+
+示例:
+  nexus-cli stop
+`,
 	Run: func(cmd *cobra.Command, args []string) {
 		stop()
 	},

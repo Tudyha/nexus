@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"sync"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -13,7 +15,40 @@ import (
 	"github.com/Tudyha/nexus/pkg/enum"
 	"github.com/Tudyha/nexus/pkg/errcode"
 	"github.com/Tudyha/nexus/pkg/request"
+	"github.com/rs/zerolog/log"
 )
+
+// tokenBlacklist 内存 Token 黑名单
+var tokenBlacklist struct {
+	mu    sync.RWMutex
+	token map[string]time.Time // token -> 过期时间
+}
+
+func init() {
+	tokenBlacklist.token = make(map[string]time.Time)
+	// 定期清理过期 token（每小时）
+	go func() {
+		for {
+			time.Sleep(1 * time.Hour)
+			tokenBlacklist.mu.Lock()
+			now := time.Now()
+			for t, expire := range tokenBlacklist.token {
+				if now.After(expire) {
+					delete(tokenBlacklist.token, t)
+				}
+			}
+			tokenBlacklist.mu.Unlock()
+		}
+	}()
+}
+
+// IsTokenBlacklisted 检查 token 是否在黑名单中
+func IsTokenBlacklisted(token string) bool {
+	tokenBlacklist.mu.RLock()
+	defer tokenBlacklist.mu.RUnlock()
+	_, ok := tokenBlacklist.token[token]
+	return ok
+}
 
 type authService struct {
 	userDao     dao.UserDao
@@ -127,16 +162,51 @@ func (s *authService) registerByPhone(ctx context.Context, phone string) (*model
 	return user, nil
 }
 
-// Logout 用户登出
+// Logout 用户登出，将 Token 加入黑名单
 func (s *authService) Logout(ctx context.Context, token string) error {
-	// TODO: 实现Token黑名单逻辑
-	// 可以将Token添加到Redis的黑名单中，设置过期时间
+	if token == "" {
+		return errcode.ErrInvalidParams
+	}
+	tokenBlacklist.mu.Lock()
+	tokenBlacklist.token[token] = time.Now().Add(24 * time.Hour) // 最多黑名单保留 24h
+	tokenBlacklist.mu.Unlock()
+	log.Info().Msg("user logged out, token blacklisted")
 	return nil
 }
 
 // RefreshToken 刷新Token
 func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (string, error) {
-	// TODO: 实现Token刷新逻辑
-	// 验证refreshToken，生成新的accessToken
-	return "", errors.New("Token刷新功能待实现")
+	if refreshToken == "" {
+		return "", errcode.ErrInvalidParams
+	}
+	return "", errors.New("token 刷新功能待实现")
+}
+
+// SetPassword 设置/修改密码
+func (s *authService) SetPassword(ctx context.Context, userID uint64, oldPassword, newPassword string) (*model.User, error) {
+	user, err := s.userDao.FindByID(ctx, userID)
+	if err != nil {
+		return nil, errcode.ErrUserNotExist
+	}
+
+	// 已有密码时需要验证旧密码
+	if user.Password != "" {
+		if oldPassword == "" {
+			return nil, errcode.ErrInvalidParams
+		}
+		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPassword)); err != nil {
+			return nil, errcode.ErrLoginFailed
+		}
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+	user.Password = string(hash)
+
+	if err := s.userDao.Update(ctx, user); err != nil {
+		return nil, err
+	}
+	return user, nil
 }

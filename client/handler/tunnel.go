@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -15,6 +16,7 @@ import (
 	nexusio "github.com/Tudyha/nexus/pkg/io"
 	"github.com/Tudyha/nexus/pkg/proto"
 	"github.com/creack/pty"
+	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -52,23 +54,29 @@ func (t *TunnelHandler) Handle(ctx conn.Context) error {
 		return err
 	}
 
+	log.Info().Str("type", req.GetType().String()).Str("remote", req.RemoteAddr).Msg("收到隧道请求")
+
 	switch req.GetType() {
 	case proto.TunnelType_TCP:
 		dst, err = t.openTcp(req.RemoteAddr)
 		if err != nil {
 			return err
 		}
+		log.Info().Str("remote", req.RemoteAddr).Msg("TCP 隧道已连接")
 	case proto.TunnelType_UDP:
 		dst, err = t.openUdp(req.RemoteAddr)
 		if err != nil {
 			return err
 		}
+		log.Info().Str("remote", req.RemoteAddr).Msg("UDP 隧道已连接")
 	case proto.TunnelType_PTY:
 		dst, err = t.openPty()
 		if err != nil {
 			return err
 		}
+		log.Info().Msg("PTY 终端已创建")
 	default:
+		return fmt.Errorf("unknown tunnel type: %v", req.GetType())
 	}
 
 	// 劫持底层连接，上层不会再进行数据读写
@@ -78,7 +86,14 @@ func (t *TunnelHandler) Handle(ctx conn.Context) error {
 	}
 
 	// 数据转发
-	go nexusio.Copy(src, dst)
+	switch req.GetType() {
+	case proto.TunnelType_PTY:
+		go nexusio.CopyBuf(src, dst, 16*1024)
+	case proto.TunnelType_UDP:
+		go t.relayUDP(src, dst)
+	default:
+		go nexusio.Copy(src, dst)
+	}
 	return nil
 }
 
@@ -94,8 +109,54 @@ func (p *TunnelHandler) openUdp(addr string) (io.ReadWriteCloser, error) {
 	return net.Dial("udp", addr)
 }
 
+// relayUDP 双向转发 UDP 数据报：在 smux 流上使用长度前缀帧，保持数据报边界
+func (t *TunnelHandler) relayUDP(stream io.ReadWriteCloser, udpConn io.ReadWriteCloser) {
+	log.Info().Msg("UDP relay 开始转发")
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// smux 流 → UDP（读取帧，写入 UDP 套接字）
+	go func() {
+		defer wg.Done()
+		framer := nexusio.NewDatagramStream(stream.(io.ReadWriter))
+		for {
+			data, err := framer.ReadDatagram()
+			if err != nil {
+				udpConn.Close()
+				return
+			}
+			if _, err := udpConn.Write(data); err != nil {
+				stream.Close()
+				return
+			}
+		}
+	}()
+
+	// UDP → smux 流（读取数据报，写入帧）
+	go func() {
+		defer wg.Done()
+		framer := nexusio.NewDatagramStream(stream.(io.ReadWriter))
+		buf := make([]byte, 65536)
+		for {
+			n, err := udpConn.Read(buf)
+			if err != nil {
+				stream.Close()
+				return
+			}
+			if err := framer.WriteDatagram(buf[:n]); err != nil {
+				udpConn.Close()
+				return
+			}
+		}
+	}()
+
+	wg.Wait()
+	log.Info().Msg("UDP relay 结束")
+}
+
 func (p *TunnelHandler) openPty() (io.ReadWriteCloser, error) {
 	shell := defaultShell()
+	log.Info().Str("shell", shell).Msg("创建 PTY 终端")
 	cmd := exec.Command(shell)
 	// 继承环境，让 shell 正常工作
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")

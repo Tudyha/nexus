@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/Tudyha/nexus/pkg/conn"
 	"github.com/Tudyha/nexus/pkg/proto"
@@ -40,7 +41,7 @@ func executeUpgrade(c *conn.Conn, task *proto.Task, payload *proto.UpgradePayloa
 	}
 
 	reportProgress(c, task.TaskId, 10, "开始下载")
-	downloadBinary(payload.DownloadUrl, tmpPath, func(done, total int64) {
+	if err := downloadBinary(payload.DownloadUrl, tmpPath, func(done, total int64) {
 		if total > 0 {
 			pct := int32(10 + (done * 60 / total))
 			if pct > 70 {
@@ -48,7 +49,10 @@ func executeUpgrade(c *conn.Conn, task *proto.Task, payload *proto.UpgradePayloa
 			}
 			reportProgress(c, task.TaskId, pct, fmt.Sprintf("下载中 %d%%", pct))
 		}
-	})
+	}); err != nil {
+		reportProgressDone(c, task.TaskId, false, fmt.Sprintf("download: %v", err))
+		return err
+	}
 
 	reportProgress(c, task.TaskId, 80, "校验文件中")
 	if err := utils.VerifyChecksum(tmpPath, payload.Checksum); err != nil {
@@ -92,8 +96,27 @@ func reportProgressDone(c *conn.Conn, taskID uint64, success bool, errorMsg stri
 	})
 }
 
+// progressWriter 包装 io.Writer，每次 Write 时回调进度函数
+type progressWriter struct {
+	w          io.Writer
+	total      int64
+	written    int64
+	progressFn func(done, total int64)
+}
+
+func (pw *progressWriter) Write(p []byte) (int, error) {
+	n, err := pw.w.Write(p)
+	pw.written += int64(n)
+	if pw.progressFn != nil && pw.total > 0 {
+		pw.progressFn(pw.written, pw.total)
+	}
+	return n, err
+}
+
+var downloadClient = &http.Client{Timeout: 5 * time.Minute}
+
 func downloadBinary(url, dest string, progressFn func(done, total int64)) error {
-	resp, err := http.Get(url)
+	resp, err := downloadClient.Get(url)
 	if err != nil {
 		return err
 	}
@@ -105,31 +128,12 @@ func downloadBinary(url, dest string, progressFn func(done, total int64)) error 
 	}
 	defer out.Close()
 
-	if progressFn != nil {
-		// 带进度回调的拷贝
-		buf := make([]byte, 32*1024)
-		var written int64
-		total := resp.ContentLength
-		for {
-			n, err := resp.Body.Read(buf)
-			if n > 0 {
-				if _, werr := out.Write(buf[:n]); werr != nil {
-					return werr
-				}
-				written += int64(n)
-				progressFn(written, total)
-			}
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				return err
-			}
-		}
-		return nil
+	var dst io.Writer = out
+	if progressFn != nil && resp.ContentLength > 0 {
+		dst = &progressWriter{w: out, total: resp.ContentLength, progressFn: progressFn}
 	}
 
-	_, err = io.Copy(out, resp.Body)
+	_, err = io.Copy(dst, resp.Body)
 	return err
 }
 

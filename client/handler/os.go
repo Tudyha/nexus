@@ -1,21 +1,22 @@
 package handler
 
 import (
-	"os"
-
 	"github.com/Tudyha/nexus/pkg/conn"
 	"github.com/Tudyha/nexus/pkg/proto"
 )
 
 type ExitHandler struct {
+	onExit func()
 }
 
-func NewExitHandler() conn.MessageHandler {
-	return &ExitHandler{}
+func NewExitHandler(onExit func()) conn.MessageHandler {
+	return &ExitHandler{onExit: onExit}
 }
 
 func (e *ExitHandler) Handle(ctx conn.Context) error {
-	os.Exit(0)
+	if e.onExit != nil {
+		e.onExit()
+	}
 	return nil
 }
 

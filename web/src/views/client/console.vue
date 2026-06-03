@@ -3,11 +3,9 @@ import { ref, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import SystemStat from './components/system-stat.vue'
 import Terminal from './components/terminal.vue';
-import Tunnel from './components/tunnel.vue';
 import SystemInfo from './components/system-info.vue';
 import Process from './components/process.vue';
-import Docker from './components/docker.vue';
-import Database from './components/database.vue';
+import AppStore from './components/docker.vue';
 import File from './components/file.vue';
 import Network from './components/network.vue';
 
@@ -43,19 +41,9 @@ const tabs = [
         component: Network,
     },
     {
-        name: "Docker",
-        icon: "mdi:docker",
-        component: Docker,
-    },
-    {
-        name: "数据库",
-        icon: "mdi:database",
-        component: Database,
-    },
-    {
-        name: "隧道管理",
-        icon: "mdi:tunnel",
-        component: Tunnel,
+        name: "应用商店",
+        icon: "mdi:store",
+        component: AppStore,
     },
 ];
 const currentComponent = computed(() => tabs[activeTab.value]?.component);
@@ -88,7 +76,9 @@ const currentComponent = computed(() => tabs[activeTab.value]?.component);
         <div class="flex-1 overflow-hidden p-3 bg-base-200/30">
             <div class="h-full bg-base-100 rounded-lg border border-base-200 shadow-sm overflow-hidden">
                 <KeepAlive>
-                    <component :is="currentComponent" :id="id" class="h-full p-4" />
+                    <div class="h-full p-4">
+                        <component :is="currentComponent" :id="id" />
+                    </div>
                 </KeepAlive>
             </div>
         </div>

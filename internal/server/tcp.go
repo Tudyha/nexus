@@ -1,11 +1,15 @@
 package server
 
 import (
+	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/Tudyha/nexus/internal/config"
 	"github.com/Tudyha/nexus/internal/session"
+	nexustls "github.com/Tudyha/nexus/pkg/tls"
 	"github.com/rs/zerolog/log"
 )
 
@@ -16,6 +20,14 @@ type TCPServer struct {
 }
 
 // 创建一个TCP服务器
+func setTCPParams(conn *net.TCPConn) {
+	conn.SetNoDelay(true)
+	conn.SetKeepAlive(true)
+	conn.SetKeepAlivePeriod(30 * time.Second)
+	conn.SetReadBuffer(256 * 1024)  // 256KB
+	conn.SetWriteBuffer(256 * 1024) // 256KB
+}
+
 func NewTCPServer() Server {
 	cfg := config.Get()
 	addr := net.JoinHostPort("0.0.0.0", fmt.Sprintf("%d", cfg.Server.TCP.Port))
@@ -31,6 +43,21 @@ func (s *TCPServer) Start() error {
 	if err != nil {
 		return err
 	}
+
+	cfg := config.Get()
+	if cfg.Server.TLS.Enabled {
+		tlsCfg, err := nexustls.LoadServerConfig(&nexustls.ServerConfig{
+			CertFile: cfg.Server.TLS.CertFile,
+			KeyFile:  cfg.Server.TLS.KeyFile,
+		})
+		if err != nil {
+			ln.Close()
+			return err
+		}
+		ln = tls.NewListener(ln, tlsCfg)
+		log.Info().Str("addr", s.addr).Msg("tcp server with TLS enabled")
+	}
+
 	s.ln = ln
 	go s.accept()
 
@@ -43,6 +70,10 @@ func (s *TCPServer) accept() {
 	for {
 		conn, err := s.ln.Accept()
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
+			log.Error().Err(err).Msg("tcp server accept error")
 			return
 		}
 		go s.handleConn(conn)
@@ -51,6 +82,9 @@ func (s *TCPServer) accept() {
 
 // 处理连接
 func (s *TCPServer) handleConn(conn net.Conn) {
+	if tc, ok := conn.(*net.TCPConn); ok {
+		setTCPParams(tc)
+	}
 	if err := s.sessionManager.NewSession(conn); err != nil {
 		log.Error().Err(err).Msg("new session error")
 		conn.Close()

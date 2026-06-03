@@ -1,7 +1,7 @@
 package middleware
 
-func Init() error {
-	if err := initAuthMiddleware(); err != nil {
+func Init(jwtSecret string) error {
+	if err := initAuthMiddleware(jwtSecret); err != nil {
 		return err
 	}
 	return nil

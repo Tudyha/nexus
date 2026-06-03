@@ -12,3 +12,15 @@ type WorkspaceResponse struct {
 
 	AppList []*AppResponse `json:"app_list"` // 应用列表
 }
+
+
+// 工作空间用户
+type WorkspaceUserResponse struct {
+	ID          uint64    `json:"id"`
+	WorkspaceID uint64    `json:"workspace_id"`
+	UserID      uint64    `json:"user_id"`
+	Role        int       `json:"role"`
+	Nickname    string    `json:"nickname"`
+	Avatar      string    `json:"avatar"`
+	CreatedAt   time.Time `json:"created_at"`
+}

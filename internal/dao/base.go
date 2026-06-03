@@ -49,18 +49,30 @@ type UserDao interface {
 	Update(ctx context.Context, user *model.User) error
 	FindByID(ctx context.Context, id uint64) (*model.User, error)
 	FindByUsername(ctx context.Context, username string) (*model.User, error)
+	List(ctx context.Context, page, pageSize int) ([]*model.User, int64, error)
 }
 
 type WorkspaceDao interface {
 	Create(ctx context.Context, name, description string) (*model.Workspace, error)
 	CreateWorkspaceUser(ctx context.Context, workspaceID, userID uint64, role int) error
 	GetByUserID(ctx context.Context, userID uint64) ([]*model.Workspace, error)
+	GetByID(ctx context.Context, id uint64) (*model.Workspace, error)
+	List(ctx context.Context) ([]*model.Workspace, error)
+	Update(ctx context.Context, workspace *model.Workspace) error
+	Delete(ctx context.Context, id uint64) error
+	ListUsers(ctx context.Context, workspaceID uint64) ([]*WorkspaceUserInfo, error)
+	DeleteWorkspaceUser(ctx context.Context, workspaceID, userID uint64) error
+	UpdateUserRole(ctx context.Context, workspaceID, userID uint64, role int) error
 }
 
 type AppDao interface {
 	GetByID(ctx context.Context, appID uint64) (*model.App, error)
 	Create(ctx context.Context, workspaceID uint64, secret, name, description string) error
 	GetAppByWorkspaceIDs(ctx context.Context, workspaceIDs []uint64) ([]*model.App, error)
+	UpdateConfig(ctx context.Context, appID uint64, config string) error
+	ListByWorkspaceID(ctx context.Context, workspaceID uint64) ([]*model.App, error)
+	Update(ctx context.Context, app *model.App) error
+	Delete(ctx context.Context, id uint64) error
 }
 
 type ClientDao interface {
@@ -74,6 +86,7 @@ type ClientDao interface {
 	GetByID(ctx context.Context, id uint64) (*model.Client, error)
 	DeleteByID(ctx context.Context, id uint64) error
 	GetByIDs(ctx context.Context, ids []uint64) ([]*model.Client, error)
+	ListOnlineByAppID(ctx context.Context, appID uint64) ([]*model.Client, error)
 }
 
 type TunnelDao interface {

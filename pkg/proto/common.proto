@@ -14,14 +14,34 @@ enum MessageType {
   HEARTBEAT_ACK = 4; // 心跳响应
   DISCONNECT    = 5; // 断开连接
 
+  EXIT = 30; // 客户端退出程序
+
   // 31-40 tunnel消息
   TUNNEL_OPEN     = 31; // 创建 tunnel
   TUNNEL_OPEN_ACK = 32; // 创建 tunnel 响应
 
-  // 命令消息
-  EXIT    = 41; // 退出程序
-  TASK = 42; // 下发任务
-  TASK_PROGRESS = 43; // 任务进度上报
+  // 41-50 任务消息
+  TASK          = 41; // 下发任务
+  TASK_PROGRESS = 42; // 任务进度上报
+
+  // 51-60 进程管理
+  PROCESS_LIST = 51; // 列出进程
+  PROCESS_KILL = 52; // 终止进程
+
+  // 61-70 文件管理
+  FILE_LIST     = 61; // 列出目录
+  FILE_DOWNLOAD = 62; // 下载文件
+  FILE_UPLOAD   = 63; // 上传文件
+  FILE_DELETE   = 64; // 删除文件/目录
+  FILE_MKDIR    = 65; // 创建目录
+  FILE_RENAME   = 66; // 重命名文件/目录
+
+  // 71-80 网络管理
+  NETWORK_LIST = 71; // 列出网络连接
+
+  // 81-90 应用管理
+  APP_CHECK   = 81; // 检测已安装应用
+  APP_INSTALL = 82; // 安装应用
 }
 
 // 错误码
@@ -38,3 +58,5 @@ enum TunnelType {
   UDP                 = 2; // UDP 隧道
   PTY                 = 3; // 伪终端隧道
 }
+
+message ExitReq {}

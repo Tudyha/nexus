@@ -31,12 +31,16 @@ func (h *DisconnectHandler) Handle(ctx conn.Context) error {
 		return err
 	}
 	// 更新状态
-	h.clientService.UpdateStatus(ctx, client.ID, enum.ClientOffline)
+	if err := h.clientService.UpdateStatus(ctx, client.ID, enum.ClientOffline); err != nil {
+		return err
+	}
 
 	// 发送mq消息
-	h.pub.Publish(constant.MQ_TOPIC_CLIENT_OFFLINE, &message.Message{
+	if err := h.pub.Publish(constant.MQ_TOPIC_CLIENT_OFFLINE, &message.Message{
 		Payload: []byte(sessionId),
-	})
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 

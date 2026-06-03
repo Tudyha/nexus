@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"time"
 
 	"github.com/Tudyha/nexus/internal/api"
@@ -24,10 +25,13 @@ func NewHTTPServer() Server {
 	router := gin.New()
 
 	// 注册中间件
-	registerMiddlewares(router)
+	registerMiddlewares(router, cfg.Server.JWTSecret)
 
 	// 注册路由
 	api.RegisterRoutes(router)
+
+	pprofRouter := router.Group("/debug")
+	pprofRouter.GET("/pprof/*profile", gin.WrapH(http.DefaultServeMux))
 
 	addr := net.JoinHostPort("0.0.0.0", fmt.Sprintf("%d", cfg.Server.HTTP.Port))
 	s := &http.Server{
@@ -44,7 +48,7 @@ func NewHTTPServer() Server {
 func (h *httpServer) Start() error {
 	go func() {
 		if err := h.s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			return
+			log.Error().Err(err).Str("addr", h.s.Addr).Msg("http server listen error")
 		}
 	}()
 
@@ -56,7 +60,9 @@ func (h *httpServer) Stop() error {
 	if h.s == nil {
 		return nil
 	}
-	return h.s.Shutdown(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return h.s.Shutdown(ctx)
 }
 
 func (h *httpServer) String() string {
@@ -64,10 +70,17 @@ func (h *httpServer) String() string {
 }
 
 // registerMiddlewares 注册中间件
-func registerMiddlewares(router *gin.Engine) {
+func registerMiddlewares(router *gin.Engine, jwtSecret string) {
 	// 基础中间件
 	router.Use(gin.Recovery())
 
 	// 自定义中间件
-	middleware.Init()
+	middleware.Init(jwtSecret)
+
+	// 速率限制
+	cfg := config.Get()
+	if cfg.Server.RateLimit.Enabled {
+		middleware.InitRateLimiter(cfg.Server.RateLimit.Rate, cfg.Server.RateLimit.Burst)
+		router.Use(middleware.RateLimit())
+	}
 }

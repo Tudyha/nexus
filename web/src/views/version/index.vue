@@ -69,10 +69,20 @@ const resetForm = () => {
   uploadFile.value = undefined;
 };
 
-const handleDelete = async (id: number) => {
-  if (!confirm("确定删除此版本？")) return;
-  await deleteVersion(id);
+const deleteId = ref<number | null>(null);
+const deleteModal = ref<HTMLDialogElement>();
+
+const confirmDelete = (id: number) => {
+  deleteId.value = id;
+  deleteModal.value?.showModal();
+};
+
+const handleDelete = async () => {
+  if (deleteId.value === null) return;
+  await deleteVersion(deleteId.value);
   ui.showToast("删除成功", "success");
+  deleteModal.value?.close();
+  deleteId.value = null;
   handleSearch();
 };
 
@@ -128,7 +138,7 @@ const osIconMap: Record<string, string> = clientOsIconMap;
               <td class="max-w-40 truncate" :title="item.changelog">{{ item.changelog || "-" }}</td>
               <td class="text-xs">{{ formatDateTime(item.created_at) }}</td>
               <td class="text-center">
-                <button class="btn btn-ghost btn-xs text-error" @click="handleDelete(item.id)">
+                <button class="btn btn-ghost btn-xs text-error" @click="confirmDelete(item.id)">
                   <Icon icon="mdi:delete" class="w-4 h-4" /> 删除
                 </button>
               </td>
@@ -147,7 +157,20 @@ const osIconMap: Record<string, string> = clientOsIconMap;
       </div>
     </div>
 
-    <!-- 上传版本模态框 -->
+    <!-- 删除确认模态框 -->
+    <dialog ref="deleteModal" class="modal">
+      <div class="modal-box">
+        <h3 class="font-bold text-lg mb-2">确认删除</h3>
+        <p class="text-base-content/70">确定删除此版本？此操作不可恢复。</p>
+        <div class="modal-action">
+          <button class="btn btn-ghost btn-sm" @click="deleteModal?.close()">取消</button>
+          <button class="btn btn-error btn-sm" @click="handleDelete">确认删除</button>
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+  <!-- 上传版本模态框 -->
     <dialog ref="uploadModal" class="modal">
       <div class="modal-box max-w-lg">
         <form method="dialog">

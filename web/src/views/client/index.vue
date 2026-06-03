@@ -1,9 +1,12 @@
 <script lang="ts" setup>
-import { getClientPage, getV2raySubscribe } from "@/api/client";
+import { getClientPage, getV2raySubscribe, upgradeClient, createBatchTask } from "@/api/client";
 import { usePageList } from "@/composables/usePageList";
+import { useUIStore } from "@/stores/ui";
 import Bind from './components/bind.vue'
 import Client from './components/client.vue'
 import type { SearchItem } from '@/types'
+
+const ui = useUIStore();
 
 const searchItems: SearchItem[] = [
   {
@@ -89,6 +92,53 @@ const v2rayLink = ref<string>("")
 const handleV2raySubscribe = async () => {
   v2rayLink.value = await getV2raySubscribe(selectedIds.value)
   v2rayModalRef.value?.showModal()
+}
+
+// Batch upgrade
+const batchUpgradeLoading = ref(false)
+const upgradeModal = ref<HTMLDialogElement>()
+
+function handleBatchUpgrade() {
+  if (selectedIds.value.length === 0) return
+  upgradeModal.value?.showModal()
+}
+
+async function confirmBatchUpgrade() {
+  upgradeModal.value?.close()
+  batchUpgradeLoading.value = true
+  try {
+    for (const id of selectedIds.value) {
+      await upgradeClient(id)
+    }
+    ui.showToast("升级任务已下发", "success")
+    selectedIds.value = []
+  } catch { /* toast handled by interceptor */ }
+  finally { batchUpgradeLoading.value = false }
+}
+
+// Batch command
+const batchCommand = ref("")
+const commandModalRef = ref<HTMLDialogElement | null>(null)
+const commandLoading = ref(false)
+
+const openBatchCommand = () => {
+  batchCommand.value = ""
+  commandModalRef.value?.showModal()
+}
+
+const handleBatchCommand = async () => {
+  if (!batchCommand.value.trim()) {
+    ui.showToast("请输入要执行的命令", "error")
+    return
+  }
+  commandLoading.value = true
+  try {
+    await createBatchTask(2, selectedIds.value)
+    ui.showToast("命令任务已下发", "success")
+    commandModalRef.value?.close()
+    selectedIds.value = []
+  } catch { /* toast handled by interceptor */ }
+  finally { commandLoading.value = false }
 }
 
 </script>
@@ -180,9 +230,13 @@ const handleV2raySubscribe = async () => {
             <Icon icon="mdi:link" class="w-4 h-4" />
             v2ray订阅
           </button>
-          <button class="btn btn-primary btn-xs lg:btn-sm gap-2" onclick="batch_command_modal.showModal()">
+          <button class="btn btn-primary btn-xs lg:btn-sm gap-2" @click="openBatchCommand">
             <Icon icon="mdi:console-line" class="w-4 h-4" />
             执行命令
+          </button>
+          <button class="btn btn-primary btn-xs lg:btn-sm gap-2" :disabled="batchUpgradeLoading" @click="handleBatchUpgrade">
+            <Icon icon="mdi:package-up" class="w-4 h-4" />
+            {{ batchUpgradeLoading ? '升级中...' : '批量升级' }}
           </button>
         </div>
 
@@ -207,7 +261,7 @@ const handleV2raySubscribe = async () => {
     </dialog>
 
     <!-- 批量执行命令模态框 -->
-    <dialog id="batch_command_modal" class="modal">
+    <dialog ref="commandModalRef" class="modal">
       <div class="modal-box max-w-2xl">
         <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
           <Icon icon="mdi:console-line" class="text-primary w-6 h-6" />
@@ -218,7 +272,7 @@ const handleV2raySubscribe = async () => {
             <label class="label">
               <span class="label-text">请输入要在已选主机上执行的命令</span>
             </label>
-            <textarea class="textarea textarea-bordered h-32 font-mono text-sm"
+            <textarea v-model="batchCommand" class="textarea textarea-bordered h-32 font-mono text-sm"
               placeholder="例如: uptime, df -h, ls -la..."></textarea>
           </div>
 
@@ -234,10 +288,35 @@ const handleV2raySubscribe = async () => {
           </div>
         </div>
         <div class="modal-action">
+          <button class="btn btn-ghost" :disabled="commandLoading" @click="commandModalRef?.close()">取消</button>
+          <button class="btn btn-primary ml-2" :disabled="commandLoading" @click="handleBatchCommand">
+            {{ commandLoading ? '下发中...' : '开始执行' }}
+          </button>
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+      </form>
+    </dialog>
+
+    <!-- Batch Upgrade Confirm Modal -->
+    <dialog ref="upgradeModal" class="modal">
+      <div class="modal-box">
+        <h3 class="font-bold text-lg flex items-center gap-2">
+          <Icon icon="mdi:alert-circle-outline" class="w-6 h-6 text-warning" />
+          确认批量升级
+        </h3>
+        <p class="py-4 text-base-content/70">
+          确定对 <span class="font-bold text-base-content">{{ selectedIds.length }} 台</span> 主机执行升级操作？
+        </p>
+        <div class="modal-action">
           <form method="dialog">
             <button class="btn btn-ghost">取消</button>
-            <button class="btn btn-primary ml-2">开始执行</button>
           </form>
+          <button class="btn btn-warning" @click="confirmBatchUpgrade">
+            <Icon icon="mdi:rocket-launch" class="w-4 h-4" />
+            执行升级
+          </button>
         </div>
       </div>
       <form method="dialog" class="modal-backdrop">

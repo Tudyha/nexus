@@ -16,7 +16,7 @@ export const useUserStore = defineStore(
     const appList = computed(
       () =>
         workspaceList.value.find(
-          (workspace) => workspace.id === currentWorkspace.value
+          (workspace) => String(workspace.id) === String(currentWorkspace.value)
         )?.app_list
     );
 

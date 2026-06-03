@@ -1,7 +1,15 @@
 server:
   env: dev
   host: 127.0.0.1
-  
+  jwt_secret: "" # JWT 签名密钥，留空则在启动时自动生成（重启后所有 Token 会失效）
+  log_level: info # 日志级别: debug, info, warn, error
+
+  # API 速率限制
+  rate_limit:
+    enabled: true # 是否启用
+    rate: 10      # 每秒令牌数
+    burst: 20     # 最大突发请求
+
   http:
     port: 8080
     write_timeout: 30

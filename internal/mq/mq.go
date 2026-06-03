@@ -22,3 +22,10 @@ func GetPubSub() *gochannel.GoChannel {
 	}
 	return pubSub
 }
+
+func Close() error {
+	if pubSub != nil {
+		return pubSub.Close()
+	}
+	return nil
+}

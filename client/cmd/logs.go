@@ -1,57 +1,60 @@
-/*
-Copyright © 2026 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
+	"bufio"
 	"fmt"
-	"log"
+	"io"
 	"os"
+	"time"
 
-	"github.com/hpcloud/tail"
 	"github.com/spf13/cobra"
 )
 
 var follow bool
 
-// logsCmd represents the logs command
 var logsCmd = &cobra.Command{
 	Use:   "logs",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Short: "查看客户端日志",
+	Long: `查看 Nexus 客户端的运行日志。
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+默认输出全部日志内容。
+使用 --follow (-f) 选项可以实时跟踪日志输出（类似 tail -f）。
+
+示例:
+  nexus-cli logs
+  nexus-cli logs -f
+`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if follow {
-			// 类似 tail -f 的实现
-			t, err := tail.TailFile(logFile, tail.Config{
-				Follow:    true,
-				ReOpen:    true, // 如果文件被切割，自动重新打开
-				MustExist: true,
-			})
-			if err != nil {
-				log.Fatal(err)
-			}
+		f, err := os.Open(logFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to open log file: %v\n", err)
+			return
+		}
+		defer f.Close()
 
-			fmt.Printf("--- 正在实时追踪日志: %s ---\n", logFile)
-			for line := range t.Lines {
-				fmt.Println(line.Text)
+		if follow {
+			f.Seek(0, io.SeekEnd)
+			r := bufio.NewReader(f)
+			for {
+				line, err := r.ReadString('\n')
+				fmt.Print(line)
+				if err != nil {
+					time.Sleep(1 * time.Second)
+				}
 			}
 		} else {
-			// 仅仅读取并打印当前内容
-			content, err := os.ReadFile(logFile)
+			content, err := io.ReadAll(f)
 			if err != nil {
-				log.Fatalf("无法读取日志文件: %v", err)
+				fmt.Fprintf(os.Stderr, "failed to read log file: %v\n", err)
+				return
 			}
 			fmt.Print(string(content))
 		}
 	},
 }
 
+
 func init() {
 	rootCmd.AddCommand(logsCmd)
-	logsCmd.Flags().BoolVarP(&follow, "follow", "f", false, "实时追踪日志输出")
+	logsCmd.Flags().BoolVarP(&follow, "follow", "f", false, "follow log output")
 }

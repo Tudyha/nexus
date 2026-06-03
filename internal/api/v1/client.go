@@ -1,12 +1,10 @@
 package v1
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/Tudyha/nexus/internal/config"
@@ -31,6 +29,7 @@ type ClientController struct {
 	appService     service.AppService
 	versionService service.VersionService
 	sessionManager session.Manager
+	taskService    service.TaskService
 }
 
 func newClientController() *ClientController {
@@ -39,6 +38,7 @@ func newClientController() *ClientController {
 		appService:     service.GetAppService(),
 		versionService: service.GetVersionService(),
 		sessionManager: session.GetManager(),
+		taskService:    service.GetTaskService(),
 	}
 }
 
@@ -63,12 +63,6 @@ func (h *ClientController) GetPage(ctx *gin.Context) {
 	response.Success(ctx, res)
 }
 
-type clientConfig struct {
-	ServerAddr string `json:"server_addr"` // 服务器地址
-	AppId      int64  `json:"app_id"`      // 应用id
-	AppSecret  string `json:"app_secret"`  // 应用密钥
-}
-
 // 获取客户端绑定命令
 func (h *ClientController) GetBind(ctx *gin.Context) {
 	appID := getAppID(ctx)
@@ -84,8 +78,14 @@ func (h *ClientController) GetBind(ctx *gin.Context) {
 	}
 
 	cfg := config.Get()
-
 	addr := net.JoinHostPort(cfg.Server.Host, fmt.Sprintf("%d", cfg.Server.TCP.Port))
+
+	type clientConfig struct {
+		ServerAddr string `json:"server_addr"` // 服务器地址
+		AppId      int64  `json:"app_id"`      // 应用id
+		AppSecret  string `json:"app_secret"`  // 应用密钥
+	}
+
 	agentConfig := clientConfig{
 		ServerAddr: addr,
 		AppId:      int64(app.ID),
@@ -125,6 +125,42 @@ func (h *ClientController) GetBind(ctx *gin.Context) {
 	response.Success(ctx, res)
 }
 
+// 更新客户端配置
+func (h *ClientController) UpdateConfig(ctx *gin.Context) {
+	appID := getAppID(ctx)
+	if appID == 0 {
+		response.Fail(ctx, errcode.ErrInvalidParams)
+		return
+	}
+	var req struct {
+		Config string `json:"config"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.FailWithMsg(ctx, errcode.ErrInvalidParams, err.Error())
+		return
+	}
+	if err := h.appService.UpdateConfig(ctx, appID, req.Config); err != nil {
+		response.Fail(ctx, err)
+		return
+	}
+	response.Success(ctx, nil)
+}
+
+// 获取应用配置
+func (h *ClientController) GetConfig(ctx *gin.Context) {
+	appID := getAppID(ctx)
+	if appID == 0 {
+		response.Fail(ctx, errcode.ErrInvalidParams)
+		return
+	}
+	app, err := h.appService.GetApp(ctx, appID)
+	if err != nil {
+		response.Fail(ctx, err)
+		return
+	}
+	response.Success(ctx, gin.H{"config": app.Config})
+}
+
 // 获取客户端详情
 func (h *ClientController) GetByID(ctx *gin.Context) {
 	client, err := h.clientService.GetByID(ctx, getClientID(ctx))
@@ -137,29 +173,49 @@ func (h *ClientController) GetByID(ctx *gin.Context) {
 	response.Success(ctx, res)
 }
 
-// 删除客户端
-func (h *ClientController) Delete(ctx *gin.Context) {
-	client, err := h.clientService.GetByID(ctx, getClientID(ctx))
+// 获取在线客户端列表
+func (h *ClientController) ListOnline(ctx *gin.Context) {
+	appID := getAppID(ctx)
+	if appID == 0 {
+		response.Fail(ctx, errcode.ErrInvalidParams)
+		return
+	}
+	clients, err := h.clientService.ListOnline(ctx, appID)
 	if err != nil {
 		response.Fail(ctx, err)
 		return
 	}
+	type simpleClient struct {
+		ID       uint64 `json:"id"`
+		Hostname string `json:"hostname"`
+	}
+	var list []simpleClient
+	for _, c := range clients {
+		list = append(list, simpleClient{ID: c.ID, Hostname: c.Hostname})
+	}
+	response.Success(ctx, list)
+}
 
-	if s, err := h.sessionManager.GetSession(client.SessionID); s != nil && err == nil {
+// 删除客户端
+func (h *ClientController) Delete(ctx *gin.Context) {
+	if s, err := h.getSession(ctx); s != nil && err == nil {
 		s.Exit()
 	}
 
 	response.Success(ctx, nil)
 }
 
-// 在线终端
-func (h *ClientController) Terminal(ctx *gin.Context) {
+func (h *ClientController) getSession(ctx *gin.Context) (*session.Session, error) {
 	client, err := h.clientService.GetByID(ctx, getClientID(ctx))
 	if err != nil {
-		response.Fail(ctx, err)
-		return
+		return nil, err
 	}
-	s, err := h.sessionManager.GetSession(client.SessionID)
+	return h.sessionManager.GetSession(client.SessionID)
+}
+
+// 在线终端
+func (h *ClientController) Terminal(ctx *gin.Context) {
+	s, err := h.getSession(ctx)
 	if err != nil {
 		response.Fail(ctx, err)
 		return
@@ -188,54 +244,8 @@ func (h *ClientController) Terminal(ctx *gin.Context) {
 	go nexusio.Copy(src, &nexusio.WebSocketReadWriteCloser{Conn: dst})
 }
 
-func (h *ClientController) GenerateV2raySubscribeLink(ctx *gin.Context) {
-	var req request.GenerateV2raySubscribeRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		response.Fail(ctx, errcode.ErrInvalidParams)
-		return
-	}
-	clients, err := h.clientService.GetByIDs(ctx, req.Ids)
-	if err != nil {
-		response.Fail(ctx, err)
-		return
-	}
-
-	cfg := config.Get()
-	links := []string{}
-
-	host, port := cfg.Server.Host, cfg.Server.V2ray.Port
-
-	for _, agent := range clients {
-		addr := fmt.Sprintf(`{"add":"%s","id":"%s","net":"tcp","port":"%d","ps":"%s:%d","scy":"auto","type":"none","v":"2"}`,
-			host, agent.SessionID, port, host, port)
-		links = append(links, "vmess://"+base64.StdEncoding.EncodeToString([]byte(addr)))
-	}
-
-	content := strings.Join(links, "\n")
-	filename := fmt.Sprintf("v2ray-sub-%s.txt", utils.MD5(content))
-	res := fmt.Sprintf("http://%s:%d/%s", host, cfg.Server.HTTP.Port, filename)
-	if utils.FileExists("./tmp/" + filename) {
-		response.Success(ctx, res)
-		return
-	}
-
-	file, err := os.Create("./tmp/" + filename)
-	if err != nil {
-		response.Fail(ctx, err)
-		return
-	}
-	defer file.Close()
-	_, err = file.WriteString(content)
-	if err != nil {
-		response.Fail(ctx, err)
-		return
-	}
-
-	response.Success(ctx, res)
-}
-
 // 客户端升级
-func (h *VersionController) Upgrade(ctx *gin.Context) {
+func (h *ClientController) Upgrade(ctx *gin.Context) {
 	clientID := getClientID(ctx)
 	if clientID == 0 {
 		response.Fail(ctx, errcode.ErrInvalidParams)
@@ -250,13 +260,7 @@ func (h *VersionController) Upgrade(ctx *gin.Context) {
 		return
 	}
 
-	client, err := service.GetClientService().GetByID(ctx, clientID)
-	if err != nil {
-		response.Fail(ctx, errcode.ErrClientNotFound)
-		return
-	}
-
-	sess, err := h.sessionManager.GetSession(client.SessionID)
+	sess, err := h.getSession(ctx)
 	if err != nil {
 		response.Fail(ctx, errcode.ErrVersionNotReady)
 		return
@@ -293,26 +297,17 @@ func (h *VersionController) Upgrade(ctx *gin.Context) {
 		done := false
 
 		if err := sess.SendTask(exec.ID, proto.TaskType_UPGRADE, b, true, func(p *proto.TaskProgress) {
-			update := &model.TaskExecution{
-				Progress: p.Progress,
-				Message:  p.Message,
-			}
-			update.ID = exec.ID
 			if p.Done {
 				done = true
-				if p.Success {
-					update.Status = enum.TaskStatusSuccess // done
-				} else {
-					update.Status = enum.TaskStatusFailed // failed
-					update.Error = p.Error
-				}
 			}
-			h.taskService.UpdateExecution(ctx, update)
+			h.taskService.UpdateProgress(ctx, exec.ID, p)
 		}); err != nil {
-			h.taskService.UpdateExecution(ctx, &model.TaskExecution{
-				BaseModel: model.BaseModel{ID: exec.ID},
-				Status:    enum.TaskStatusFailed,
-				Error:     err.Error(),
+			// 任务执行失败
+			h.taskService.UpdateProgress(ctx, exec.ID, &proto.TaskProgress{
+				Message: err.Error(),
+				Done:    true,
+				Success: false,
+				Error:   err.Error(),
 			})
 			return
 		}
@@ -325,4 +320,148 @@ func (h *VersionController) Upgrade(ctx *gin.Context) {
 			})
 		}
 	}()
+}
+
+// sendAndRecv 通过 smux 发送消息并读取响应
+func (h *ClientController) sendAndRecv(ctx *gin.Context, msgType proto.MessageType, req, resp any) error {
+	s, err := h.getSession(ctx)
+	if err != nil {
+		return err
+	}
+	return s.Command(msgType, req, resp)
+}
+
+// ---- 进程管理 ----
+
+func (h *ClientController) ProcessList(ctx *gin.Context) {
+	var resp proto.ProcessListResp
+	if err := h.sendAndRecv(ctx, proto.MessageType_PROCESS_LIST, &proto.ProcessListReq{}, &resp); err != nil {
+		response.Fail(ctx, err)
+		return
+	}
+	response.Success(ctx, resp.List)
+}
+
+func (h *ClientController) ProcessKill(ctx *gin.Context) {
+	pid := utils.StringToUint64(ctx.Param("pid"))
+	if pid == 0 {
+		response.FailWithMsg(ctx, errcode.ErrInvalidParams, "invalid pid")
+		return
+	}
+
+	if err := h.sendAndRecv(ctx, proto.MessageType_PROCESS_KILL, &proto.ProcessKillReq{Pid: int32(pid)}, nil); err != nil {
+		response.Fail(ctx, err)
+		return
+	}
+	response.Success(ctx, nil)
+}
+
+// ---- 网络管理 ----
+
+func (h *ClientController) NetworkList(ctx *gin.Context) {
+	var resp proto.NetworkListResp
+	if err := h.sendAndRecv(ctx, proto.MessageType_NETWORK_LIST, &proto.NetworkListReq{}, &resp); err != nil {
+		response.Fail(ctx, err)
+		return
+	}
+	response.Success(ctx, resp.List)
+}
+
+// ---- 文件管理 ----
+
+func (h *ClientController) FileList(ctx *gin.Context) {
+	path := ctx.Query("path")
+	if path == "" {
+		path = "/"
+	}
+
+	var resp proto.FileListResp
+	if err := h.sendAndRecv(ctx, proto.MessageType_FILE_LIST, &proto.FileListReq{Path: path}, &resp); err != nil {
+		response.Fail(ctx, err)
+		return
+	}
+	response.Success(ctx, resp.Entries)
+}
+
+func (h *ClientController) FileDownload(ctx *gin.Context) {
+	path := ctx.Query("path")
+	if path == "" {
+		response.FailWithMsg(ctx, nil, "path required")
+		return
+	}
+
+	var resp proto.FileDownloadResp
+	if err := h.sendAndRecv(ctx, proto.MessageType_FILE_DOWNLOAD, &proto.FileDownloadReq{Path: path}, &resp); err != nil {
+		response.Fail(ctx, err)
+		return
+	}
+	ctx.Data(http.StatusOK, "application/octet-stream", resp.Data)
+}
+
+func (h *ClientController) FileUpload(ctx *gin.Context) {
+	path := ctx.Query("path")
+	if path == "" {
+		response.FailWithMsg(ctx, nil, "path required")
+		return
+	}
+	data, err := ctx.GetRawData()
+	if err != nil {
+		response.FailWithMsg(ctx, nil, "read body failed")
+		return
+	}
+
+	if err := h.sendAndRecv(ctx, proto.MessageType_FILE_UPLOAD, &proto.FileUploadReq{
+		Path:   path,
+		Data:   data,
+		Append: ctx.Query("append") == "true",
+	}, nil); err != nil {
+		response.Fail(ctx, err)
+		return
+	}
+	response.Success(ctx, nil)
+}
+
+func (h *ClientController) FileDelete(ctx *gin.Context) {
+	path := ctx.Query("path")
+	if path == "" {
+		response.FailWithMsg(ctx, nil, "path required")
+		return
+	}
+
+	if err := h.sendAndRecv(ctx, proto.MessageType_FILE_DELETE, &proto.FileDeleteReq{Path: path}, nil); err != nil {
+		response.Fail(ctx, err)
+		return
+	}
+	response.Success(ctx, nil)
+}
+
+func (h *ClientController) FileMkdir(ctx *gin.Context) {
+	path := ctx.Query("path")
+	if path == "" {
+		response.FailWithMsg(ctx, nil, "path required")
+		return
+	}
+
+	if err := h.sendAndRecv(ctx, proto.MessageType_FILE_MKDIR, &proto.FileMkdirReq{Path: path}, nil); err != nil {
+		response.Fail(ctx, err)
+		return
+	}
+	response.Success(ctx, nil)
+}
+
+func (h *ClientController) FileRename(ctx *gin.Context) {
+	var req struct {
+		OldPath string `json:"old_path"`
+		NewPath string `json:"new_path"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil || req.OldPath == "" || req.NewPath == "" {
+		response.FailWithMsg(ctx, nil, "old_path and new_path required")
+		return
+	}
+
+	if err := h.sendAndRecv(ctx, proto.MessageType_FILE_RENAME, &proto.FileRenameReq{OldPath: req.OldPath, NewPath: req.NewPath}, nil); err != nil {
+		response.Fail(ctx, err)
+		return
+	}
+	response.Success(ctx, nil)
 }

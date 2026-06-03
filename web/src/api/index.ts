@@ -66,6 +66,12 @@ class HttpService {
         return res.data as any;
       },
       (error) => {
+        if (error.response?.status === 401) {
+          const userStore = useUserStore();
+          userStore.logout();
+          router.push("/login");
+          return Promise.reject(error);
+        }
         const uiStore = useUIStore();
         const errorMsg = error.response?.data?.msg || error.message || "Network Error";
         uiStore.showToast(errorMsg, "error");

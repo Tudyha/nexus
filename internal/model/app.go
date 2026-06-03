@@ -7,7 +7,8 @@ type App struct {
 	Name        string `gorm:"not null"`
 	AppSecret   string `gorm:"not null"` // HMAC 密钥
 	Description string `json:"description"`
-	Status      int
+	Config      string `json:"config" gorm:"type:text"` // 客户端配置覆盖（JSON）
+	Status      int    `json:"status"`
 }
 
 func (a *App) TableName() string {

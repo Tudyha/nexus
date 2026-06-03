@@ -38,7 +38,7 @@ func CpuInfo() ([]CpuInfoStat, error) {
 	}
 
 	var cpuInfoStat []CpuInfoStat
-	copier.Copy(cpuInfoStat, cpuInfo)
+	copier.Copy(&cpuInfoStat, cpuInfo)
 	return cpuInfoStat, nil
 }
 

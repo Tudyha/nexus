@@ -11,7 +11,7 @@ message HeartbeatReq {
   NetStat  net_stat  = 4; // Client 当前网络负载快照
 }
 
-message HeartbeatRes {
+message HeartbeatResp {
 
 }
 

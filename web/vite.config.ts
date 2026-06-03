@@ -42,6 +42,26 @@ export default defineConfig(({ mode }) => {
         "@": resolve(__dirname, "src"),
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            // Vue 核心运行时
+            "vue-vendor": ["vue", "vue-router", "pinia", "pinia-plugin-persistedstate", "vue-i18n"],
+            // 图表库 echarts（~1MB），仅在监控页使用
+            "echarts": ["echarts", "vue-echarts"],
+            // 轻量图表 chart.js，在 dashboard 使用
+            "chart": ["chart.js", "vue-chartjs"],
+            // 终端组件（~800KB），仅在客户端详情页使用
+            "xterm": ["@xterm/xterm", "@xterm/addon-fit"],
+          },
+        },
+      },
+      // 启用 CSS 代码分割
+      cssCodeSplit: true,
+      // 生成 sourcemap 便于调试（生产环境可关闭）
+      sourcemap: false,
+    },
     server: {
       proxy: {
         "/api": {

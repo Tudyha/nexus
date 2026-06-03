@@ -13,6 +13,7 @@ import (
 	constant "github.com/Tudyha/nexus/pkg/const"
 	"github.com/Tudyha/nexus/pkg/errcode"
 	"github.com/Tudyha/nexus/pkg/proto"
+	smuxcfg "github.com/Tudyha/nexus/pkg/smux"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	smux "github.com/xtaci/smux/v2"
@@ -66,8 +67,10 @@ func (s *Session) checkAuth(netConn net.Conn) {
 		}
 	}()
 
-	// 读握手消息，验证身份
+	// 读握手消息，设置超时避免客户端连接但不发送数据导致 goroutine 泄漏
+	netConn.SetDeadline(time.Now().Add(30 * time.Second))
 	message, err := c.ReadMessage()
+	netConn.SetDeadline(time.Time{}) // 清除 deadline，交由 smux 管理
 	if err != nil {
 		return
 	}
@@ -81,19 +84,8 @@ func (s *Session) checkAuth(netConn net.Conn) {
 		return
 	}
 
-	// 认证成功，发送握手响应
-	if err = c.WriteMessage(proto.MessageType_HANDSHAKE_ACK, &proto.Response{}); err != nil {
-		return
-	}
-
-	// 初始化 smux session（低延迟优化配置）
-	s.session, err = smux.Server(netConn, &smux.Config{
-		KeepAliveInterval: 5 * time.Second,  // 心跳间隔
-		KeepAliveTimeout:  15 * time.Second, // 超时，需 ≥ Interval
-		MaxFrameSize:      65535,            // 最大允许值（64KB）
-		MaxReceiveBuffer:  2 * 1024 * 1024,  // 2MB
-		MaxStreamBuffer:   1 * 1024 * 1024,  // 1MB，需 ≤ MaxReceiveBuffer
-	})
+	// 初始化 smux session
+	s.session, err = smux.Server(netConn, smuxcfg.DefaultConfig())
 	if err != nil {
 		return
 	}
@@ -154,36 +146,55 @@ func (s *Session) handleStream(netConn net.Conn) {
 // Close 关闭 Session，释放资源
 func (s *Session) Close() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if !s.closed {
-		s.closed = true
-		s.status.Store(StatusClosed)
-		close(s.closeCh)
-		if s.session != nil {
-			s.session.Close()
-		}
-		// 删除 session
-		managerInstance.sessions.Delete(s.Id)
+	if s.closed {
+		s.mu.Unlock()
+		return
+	}
+	s.closed = true
+	s.mu.Unlock()
 
-		s.handleMessage(nil, &proto.Message{
+	s.status.Store(StatusClosed)
+	close(s.closeCh)
+	if s.session != nil {
+		s.session.Close()
+	}
+	// 删除 session
+	managerInstance.sessions.Delete(s.Id)
+
+	// 单独调用 disconnect handler（无需 conn，仅用 sessionId）
+	if h, ok := messageHandlers[proto.MessageType_DISCONNECT]; ok {
+		disconnectCtx := conn.NewConnContext(context.Background(), nil, &proto.Message{
 			Type: proto.MessageType_DISCONNECT,
 		})
+		disconnectCtx.WithValue(constant.ContextKeySessionId, s.Id)
+		_ = h.Handle(disconnectCtx)
 	}
 }
 
-// openTunnel 打开一个隧道，返回一个 net.Conn 对象
-func (s *Session) OpenTunnel(tunnelType proto.TunnelType, remoteAddr string) (net.Conn, error) {
-	var err error
+func (s *Session) openStream() (net.Conn, error) {
 	if s.status.Load() != StatusReady {
 		return nil, errcode.ErrClientNotReady
 	}
 
 	// 打开一个 smux 流
-	stream, err := s.session.OpenStream()
+	return s.session.OpenStream()
+}
+
+func (s *Session) openConn() (*conn.Conn, error) {
+	stream, err := s.openStream()
 	if err != nil {
 		return nil, err
 	}
+	return conn.NewConn(stream), nil
+}
 
+// openTunnel 打开一个隧道，返回一个 net.Conn 对象
+func (s *Session) OpenTunnel(tunnelType proto.TunnelType, remoteAddr string) (net.Conn, error) {
+	var err error
+	stream, err := s.openStream()
+	if err != nil {
+		return nil, err
+	}
 	c := conn.NewConn(stream)
 	defer func() {
 		if err != nil {
@@ -215,21 +226,15 @@ func (s *Session) OpenTunnel(tunnelType proto.TunnelType, remoteAddr string) (ne
 	return stream, nil
 }
 
-func (s *Session) execute(msgType proto.MessageType) error {
-	if s.status.Load() != StatusReady {
-		return errcode.ErrClientNotReady
-	}
-
-	stream, err := s.session.OpenStream()
+func (s *Session) Exit() error {
+	c, err := s.openConn()
 	if err != nil {
 		return err
 	}
-
-	c := conn.NewConn(stream)
 	defer c.Close()
 
 	// 发请求
-	if err := c.WriteMessage(msgType, &proto.ProcessReq{}); err != nil {
+	if err := c.WriteMessage(proto.MessageType_EXIT, &proto.ExitReq{}); err != nil {
 		return err
 	}
 
@@ -243,22 +248,34 @@ func (s *Session) execute(msgType proto.MessageType) error {
 	return nil
 }
 
-func (s *Session) Exit() error {
-	return s.execute(proto.MessageType_EXIT)
+// Command 通过 smux stream 发送请求并读取响应，通用方法。
+// req 会被序列化为 Message.Payload 发送。resp 非 nil 时从响应反序列化填充。
+func (s *Session) Command(msgType proto.MessageType, req any, resp any) (err error) {
+	c, err := s.openConn()
+	if err != nil {
+		return err
+	}
+	if err = c.WriteMessage(msgType, req); err != nil {
+		return err
+	}
+
+	var msg *proto.Message
+	msg, err = c.ReadMessage()
+	if err != nil {
+		return err
+	}
+	if resp != nil {
+		return c.Unmarshal(msg.Payload, resp)
+	}
+	return nil
 }
 
 // SendTask 发送任务到客户端，在同一个 smux 流上读取进度上报
 func (s *Session) SendTask(taskID uint64, taskType proto.TaskType, payload []byte, reportProgress bool, onProgress func(*proto.TaskProgress)) error {
-	if s.status.Load() != StatusReady {
-		return errcode.ErrClientNotReady
-	}
-
-	stream, err := s.session.OpenStream()
+	c, err := s.openConn()
 	if err != nil {
 		return err
 	}
-
-	c := conn.NewConn(stream)
 	defer c.Close()
 
 	req := &proto.Task{
